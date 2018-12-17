@@ -1,0 +1,1189 @@
+/* Version 4.03 */
+
+/* for all pages ------------------------------------------------------- */
+
+body {
+	background-color: #FFFFCC;
+}
+h1 {
+	margin-bottom: 0;
+}
+button {
+	text-align: center;
+	margin: 1em;
+	cursor: pointer;
+}
+input (type="checkbox") {
+	cursor: pointer;
+}
+table td {
+	vertical-align: top;
+}
+button:disabled {
+	cursor: not-allowed;
+	}
+.appt_page_header {
+	position: absolute;
+	top: 0;
+	width: 99%;
+	height: 5.4em;
+	background-color: #FFFFCC;
+	text-align: center;
+}
+.menu-buttons {
+	width: calc(100% - 2em);
+	border-top: 1px solid black;
+	border-bottom: 1px solid black;
+	font-size:110%;
+	text-align: left;
+	margin: 2px;
+	height: 1.1em;
+}
+.menuButton {
+	padding-right: 1.5em;
+	padding-left: .5em;
+	cursor: pointer;
+	display: inline-block;
+}
+.menuButton:hover {
+	font-weight: bold;
+}
+.menuButton:hover .menuButtonList {
+	display: block;
+}
+.menuButtonList {
+	display: none;
+	position: absolute;
+	border: 1px solid black;
+	padding: 5px;
+	background-color: lightgreen;
+	z-index: 3;
+}
+.menuButtonListItem {
+	font-weight: normal;
+	margin: 2px;
+}
+.menuButtonListItem:hover {
+	font-weight: bold;
+}
+.help {
+	background-color: yellow;
+	border: 1px solid black;
+	border-radius: .6em;
+	padding: 0 0.3em;
+}
+#Excel-icon {
+	height: 1em;
+}
+#DebugText {
+	color: red;
+}
+
+#trace_notify {
+	position: absolute;
+	top: 1em;
+	right: 1em;
+	z-index: 3;
+	background-color: pink;
+	border: 1px solid black;
+	padding: 5px;
+	text-align: center;
+	max-width: 50%;
+}
+
+#new_version_notify {
+	position: absolute;
+	top: 1em;
+	left: 1em;
+	z-index: 3;
+	background-color: pink;
+	border: 1px solid black;
+	padding: 5px;
+	text-align: center;
+	max-width: 50%;
+}
+
+#new_version_notify button {
+	margin: 0;
+	padding-left: 3px;
+	padding-right: 3px;
+}
+
+#change_history {
+	text-align: left;
+}
+#change_history li,
+#change_history ul {
+	line-height: 1em;
+}
+.blink {
+	font-weight: bold;
+     	color: green;
+	display: none;
+	animation:1s blinker linear infinite;
+    	-webkit-animation:1s blinker linear infinite;
+    	-moz-animation:1s blinker linear infinite;
+    	}
+
+@-moz-keyframes blinker {  
+     0% { opacity: 1.0; }
+     50% { opacity: 0.0; }
+     100% { opacity: 1.0; }
+     }
+
+@-webkit-keyframes blinker {  
+     0% { opacity: 1.0; }
+     50% { opacity: 0.0; }
+     100% { opacity: 1.0; }
+     }
+
+@keyframes blinker {  
+     0% { opacity: 1.0; }
+     50% { opacity: 0.0; }
+     100% { opacity: 1.0; }
+}
+
+/* ....................... not verified ...........*/
+
+.page_header {
+	text-align: center;
+}
+.bold {
+	font-weight: bold;
+}
+.left {
+	text-align: left;
+}
+.center {
+	text-align: center;
+}
+.hidden { 
+	display: none;
+}
+.invisible {
+	visibility: hidden;
+}
+.right {
+	text-align: right;
+}
+.danger {
+	background-color: hotpink;
+}
+.warning {
+	background-color: yellow;
+}
+.safe {
+	background-color: lightgreen;
+}
+
+/* for setup.php -------------------------------------------------------- */
+.setup_dbfail {
+	width: 75%;
+	border: 3px solid red;
+	font-size: 150%;
+	color: red;
+}
+
+#SetupTable tr td:nth-child(2) {
+	width: 10em;
+}
+
+#admin_sitename,
+#sys_website {
+	width: 25em;
+}
+
+/* for index.php -------------------------------------------------------- */
+/* ....................... not verified ...........*/
+.action_button {
+	text-align: center;
+}
+#init_main {
+	overflow-y: auto;
+}
+#disclaimer {
+	border: 2px solid black;
+	padding: 4px;
+}
+#error_message {
+	background-color: pink;
+}
+#info_block {
+	margin: 1em;
+	padding: 1em;
+}
+#init_message {
+	background-color: lightgreen;
+}
+.init_data {
+	background-color: lightblue;
+	display: none;
+}
+.init_data tr td input {
+	width: 14em;
+}
+.init_data tr td input[type="checkbox"] {
+	width: 1em;
+}
+#init_option_box {
+	background-color: lightgreen;
+	border: 1px solid black;
+} 
+#init_option_box div {
+	background-color: lightgreen;
+}
+#init_options {
+	padding: 1em;
+	min-width: 20em;
+	font-size: 120%;
+}
+.init_option {
+	font-weight: bold;
+	display: none;
+}
+
+#sysnotice {
+	width: 80%;
+	margin: auto;
+	border: 5px solid black;
+	background-color: red;
+	color: yellow;
+	font-size: 200%;
+	text-align: center;
+}
+
+/* for sitemanage.php -------------------------------------------------------- */
+#access_admin {
+	position: absolute;
+	top: 7em;
+	bottom: 1em;
+	width: calc(100% - 1em);
+	text-align: center;
+	overflow-y: scroll;
+}
+#access_user {
+	text-align: left;
+}
+#site_selections {
+	font-size: 120%;
+}
+#site_selections {
+	width: 80%;
+	border: 2px solid black;
+	margin: auto;
+	height: 1.5em;
+}
+#menuTabDiv {
+	width: 80%;
+	margin: auto;
+	font-size: 120%;
+}
+.menuTabAdmin,
+.menuTab {
+	position: relative;
+	top: 2px;
+	left: 0;
+	width: 33.33%;
+	height: 1.2em;
+	font-weight: bold;
+	text-align: center;
+	background-color: lightgreen;
+	border-top: 2px solid black;
+	border-left: 2px solid black;
+	border-right: 2px solid black;
+	border-bottom: none;
+	border-top-right-radius: 15px;
+	border-top-left-radius: 15px;
+	cursor: pointer;
+}
+
+.menuTabAdmin {
+	width: 25%;
+}
+
+#system_greeting_div {
+	width: 60%;
+	float: left;
+	font-weight: bold;
+	font-size: 120%;
+}
+
+#system_greeting {
+	width: 95%;
+	height: 30em;
+}
+
+#system_html_div {
+	width: 38%;
+	float: left;
+}
+
+#system_notice_div {
+	width: 100%;
+	float: left;
+	font-weight: bold;
+	font-size: 120%;
+}
+
+#system_notice {
+	width: 95%;
+	height: 5em;
+	margin: auto;
+	font-size: 120%;
+	color: yellow;
+	background-color: red;
+	border: 5px solid black;
+}
+
+#system_url_div {
+	font-weight: bold;
+	font-size: 120%;
+	border: 1px solid black;
+	padding: 3px;
+}
+
+#system_url {
+	width: calc(100% - 4em);
+}
+
+#system_url_div button {
+	margin: 0;
+	font-size: 60%;
+}
+
+#system_version {
+	width: 100%;
+	margin: auto;
+	font-size: 120%;
+	font-weight: bold;
+	text-align: center;
+	background-color: lightgreen;
+}
+
+/* ....................... not verified ...........*/
+#acc_user_list {
+	width: 25em;
+}
+#acc_user_table tr td:first-child {
+	width: 9em;
+}
+#acc_user_table tr td:nth-child(2) {
+	width: 12em;
+}
+#acc_user_table tr td:nth-child(3) {
+	width: 9em;
+}
+#user_information {
+	position: fixed;
+	top: 20em;
+	left: 25%;
+	background-color: lightgreen;
+	border: 3px solid black;
+	padding: 3px;
+	width: 32em;
+	z-index: 2;
+}
+#new_user_header {
+	display: none;
+}
+#acc_first, #acc_name {
+	width: 10em;
+}
+#acc_last {
+	width: 14em;
+}
+#acc_email {
+	width: 24.3em;
+}
+#sendemail {
+	margin: 0em;
+}
+#acc_home {
+	width: 31em;
+}
+#acc_phone {
+	width: 8em;
+}
+
+#osite_name_table {
+	border-collapse: collapse;
+	margin-left: 1em;
+}
+
+#osite_name_table tr th {
+	text-align: center;
+}
+
+#osite_name_table tr td {
+	border: 1px solid black;
+	border-collapse: collapse;
+}
+
+#osite_name_table tr td:first-child {
+	background-color: white;
+	cursor: pointer;
+	text-align: center;
+	width: 2em;
+}
+
+#osite_name_table tr td:nth-child(2) {
+	background-color: yellow;
+	padding-left: 3px;
+	width: 25em;
+}
+
+#acc_table tr td:first-child {
+	width: 16em;
+}
+
+.address_table {
+	width: 100%;
+}
+.address_table tr td:first-child {
+	width: 10em;
+}
+.address_table tr td:nth-child(2) {
+	width: 26em;
+}
+#site_add {
+	background-color: none;
+	border: 1px solid black;
+}
+
+#site_name,
+#site_new_name,
+#site_current_name,
+#site_website,
+#site_address,
+#site_contact,
+#osite_name,
+#site_message {
+	width: 30em;
+}
+#site_message {
+	height: 12em;
+	float: left;
+}
+#site_message_note {
+	width: calc(100% - 31em);
+	float: left;
+}
+#site_message_button {
+	font-size: 0.9em;
+	border: 1px solid black;
+	border-radius: 5px;
+	cursor: pointer;
+	box-shadow: 0px 0px 2px 2px #ccc;
+}
+#site_phone {
+	width: 9em;
+}
+#site_email {
+	width: 17em;
+}
+#site_city {
+	width: 15.3em;
+}
+#site_state {
+	width: 2em;
+}
+#site_zip {
+	width: 6.3em;
+}
+#system_options, #site_options, #user_options, #inet_options {
+	position: relative;
+	width: 80%;
+	text-align: left;
+	margin: auto;
+	border: 1px solid black;
+	border-top: none;
+	padding: 3px;
+}
+#site_client_wait input {
+	text-indent: 2em;
+}
+#user_page, #internet_page {
+	display: none;
+}
+#site_users {
+	float: none;
+}
+#user_list_div {
+	display: relative;
+	width: 100%;
+	margin: auto;
+}
+#inet_list_div {
+	display: relative;
+	margin: auto;
+}
+.inet_sort {
+	font-size: 0.75em;
+}
+#user_list_table {
+	border: 1px solid black;
+	border-collapse: collapse;
+	width: 100%;
+	cursor: pointer;
+}
+#inet_list_table {
+	border: 1px solid black;
+	border-collapse: collapse;
+	cursor: pointer;
+	margin: auto;
+}
+#inet_list_table tr,
+#user_list_table tr th {
+	border: 1px solid black;
+	border-collapse: collapse;
+	text-align: center;
+	cursor: default;
+}
+#user_list_table tr td {
+	min-width: 3em;
+	border: 1px solid black;
+	border-collapse: collapse;
+	text-align: center;
+	padding: 3px;
+}
+#user_list_table tr td:first-child,
+#inet_list_table tr td:first-child {
+	min-width: 12em;
+	text-align: left;
+}
+#inet_list_table tr td {
+	border: 1px solid black;
+	border-collapse: collapse;
+	text-align: left;
+	padding: 3px;
+}
+#inet_list_table tr td:nth-child(2) {
+	text-align: right;
+}
+#inet_list_table tr td:nth-child(4),
+#inet_list_table tr td:nth-child(5) {
+	text-align: center;
+}
+#user_list_table tr td:nth-child(7),
+#inet_list_table tr td:nth-child(7) {
+	display: none;
+}
+.user_list_site {
+	font-weight: bold;
+	text-align: left;
+	background-color: lightgrey;
+	cursor: default;
+}
+.user_change_yes {
+	color: black;
+	cursor: pointer;
+}
+.user_change_no {
+	color: grey;
+	cursor: not-allowed;
+}
+#user_option_buttons {
+	text-align: center;
+}
+.inet_button {
+	margin: 0;
+	padding: 0;
+}
+
+/* for appointment.php -------------------------------------------------- */
+
+.sidebar {
+	max-width: 17em;
+	min-width: 17em;
+	position: absolute;
+	top: 7em;
+	left: 1em;
+	text-align: center;
+	border: 1px solid black;
+	bottom: .5em;
+	overflow: hidden;
+}
+.slots {
+	position: absolute;
+	top: 7em;
+	left: 19em;
+	bottom: .5em;
+	width: calc(100% - 18em);
+}
+.slotdate {
+	position: absolute;
+	top: 0;
+	height: 1.15em;
+	width: calc(100% - 2.2em);
+}
+.slotlist {
+	position: absolute;
+	top: 1.4em;
+	bottom: 0;
+	overflow-x: hidden;
+	overflow-y: scroll;
+	width: calc(100% - 1.1em);
+}
+.slotuser {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	overflow-x: hidden;
+	overflow-y: auto;
+	width: calc(100% - 1.1em);
+}
+#viewButtons {
+	height: 3em;
+	width: 100%;
+}
+.viewButton {
+	width: 7em;
+	border: 1px solid black;
+	margin: 2px;
+}
+#viewLabel {
+	position: absolute;
+	top: 0;
+	left: 1em;
+	width: 1em;
+	height: 4em;
+	font-size: 0.65em;
+	z-index: 2;
+}
+#viewSites {
+	min-height: 5%;
+	max-height: calc(100% - 29em);
+	width: 100%;
+	overflow-y: auto;
+	border-top: 1px solid black;
+	border-bottom: 1px solid black;
+}
+#viewCal {
+	position: relative;
+	min-height: 30%;
+	width: 100%;
+	overflow-y: hidden;
+	border-bottom: 1px solid black;
+}
+#calSide {
+	position: absolute;
+	top: 0;
+	right: 0;
+	height: 30em;
+	z-index: 1;
+	width: 1em;
+	cursor: default;
+	background-color: rgb(205,205,205);
+	overflow: hidden;
+}
+#calUp {
+	position: absolute;
+	top: 0;
+	right: 0;
+	z-index: 2;
+	height: 2.5em;
+	width: 1em;
+	cursor: pointer;
+	font-weight: bold;
+	background-color: rgb(240,240,240);
+	overflow: visible;
+}
+#calDown {
+	position: absolute;
+	bottom: 0;
+	right: 0;
+	z-index: 2;
+	height: 2.5em;
+	line-height: 50%;
+	width: 1em;
+	cursor: pointer;
+	font-weight: bold;
+	background-color: rgb(240,240,240);
+	overflow: visible;
+}
+.user_class {
+	background-color: lightblue;
+}
+.reserved_class {
+	background-color: palegreen;
+	text-align: center;
+}
+.schedDateSummary {
+	cursor: pointer;
+}
+.schedDateUser {
+	cursor: default;
+}
+
+/* ....................... not verified ...........*/
+#ApptBox {
+	border: 3px solid black;
+	background-color: #FFFFAA;
+	position: fixed;
+	top: 30%;
+	z-index: 20;
+	font-size: 120%;
+}
+#MoveBox {
+	border-color: #000000;
+	background-color: #FFAAAA;
+	position: fixed;
+	top: 0;
+	z-index: 3;
+	font-size: 100%;
+	padding: 2px;
+}
+#ApptBox, #MoveBox {
+	left: 18em;
+}
+.slotnum {
+	width: 3em;
+}
+.slottime {
+	width: 8em;
+}
+#ApptTitle {
+	text-align: center;
+	font-weight: bold;
+}
+#ApptFormBox, #ApptHistoryBox {
+	width: 20em;
+	float: left;
+}
+#ApptButtonBox {
+	width: 100%;
+	text-align: center;
+}
+#ApptDataTable:first-child {
+	width: 5em;
+	text-align: right;
+	font-weight: bold;
+}
+#MoveBoxMessage {
+	border: 3px solid black;
+	text-align: center;
+	width: 100%;
+}
+#StatusBox {
+	visibility: hidden;
+	border-color: #000000;
+	background-color: #FFFFAA;
+	position: absolute;
+	left: 60%;
+	top: 30%;
+	width:40%;
+	z-index: 1;
+	font-size: 100%;
+}
+.statusbutton {
+	margin: 1px;
+}
+#HelpBox {
+	visibility: hidden;
+	border-color: #000000;
+	background-color: #FFFFAA;
+	position: absolute;
+	left: 20%;
+	top: 20%;
+	width: 60%;
+	z-index: 1;
+	font-size: 100%;
+}
+#ErrorBox {
+	visibility: hidden;
+	border-color: #000000;
+	background-color: #FFFFAA;
+	position: absolute;
+	left: 20%;
+	top: 20%;
+	width: 40%;
+	z-index: 1;
+	font-size: 100%;
+}
+#SlotBox {
+	border: 2px solid black;
+	visibility: hidden;
+	background-color: #AAFFAA;
+	position: fixed;
+	left: 30%;
+	top: 20%;
+	z-index: -1;
+	font-size: 100%;
+	text-align: center;
+	padding: 3px;
+}
+#SlotBoxTable {
+	width: 100%;
+	text-align: center;
+}
+#SlotBoxTable tr td {
+	width: 3em;
+}
+#SlotStart, #SlotStop {
+	width: 9em;
+}
+#SBGoButton {
+	background-color: hotpink;
+}
+#SBTitle {
+	position: relative;
+	width: 100%;
+	font-weight: bold;
+	font-size: 1.2em;
+	background-color: lightgreen;
+	border: 1px solid black;
+	margin-bottom: 5px;
+}
+#SlotBoxClose {
+	position: absolute;
+	top: -1px;
+	width: 2em;
+	right: -1px;
+	border: 1px solid black;
+	cursor: pointer;
+}
+.Do1Slot {
+	display: inline-block;
+	float: right;
+	border: 1px solid black;
+	margin-right: 2px;
+	min-width: 1.2em;
+	background-color: red;
+	text-align: center;
+	color: white;
+	cursor: pointer;
+}
+#site_table {
+	width: 100%;
+	text-align: left;
+	font-size: 90%;
+}
+#site_table tr td:first-child {
+	width: 1em;
+	cursor: pointer;
+}
+.calTable {
+	width: calc(99% - 1em);
+	font-size: 100%;
+}
+.calTable tr td {
+	width: 1.8em;
+}
+.calMonth {
+	background-color: tan;
+	text-align: center;
+}
+.calDate {
+	text-align: right;
+	padding-right: 0.66em;
+	font-size: 0.9em;
+	background-color: #F7F7C0;
+	cursor: pointer;
+}
+.calNoAppt {
+	background-color: transparent;
+	cursor: default;
+}
+#MonthUp, #MonthDown {
+	cursor: pointer;
+	margin-left: 1em;
+	margin-right: 1em;
+	font-weight: bold;
+}
+.sumOpt {
+	cursor: pointer;
+}
+.apptOpen {
+	background-color: lightgreen;
+	cursor: pointer;
+}
+.apptInUse {
+	cursor: pointer;
+}
+.apptWarn {
+	background-color: orange;
+	cursor: pointer;
+}
+.apptPartOpen {
+	background-color: yellow;
+	cursor: pointer;
+}
+.apptFull {
+	background-color: hotpink;
+	cursor: pointer;
+}
+.apptKey {
+	width: calc(25% - 2em);
+	max-width: 8em;
+	display: inline-block;
+	border: 1px solid black;
+	padding: auto;
+	cursor: text;
+}
+.noSelect {
+	cursor: not-allowed;
+}
+.apptUser {
+	color: blue;
+	font-weight: bold;
+}
+.apptButton {
+	width: 7em;
+	margin: 2px;
+}
+.apptTable {
+	width: 100%;
+	background-color: #FFFFBB;
+	border: 1px solid black;
+	border-collapse: collapse;
+}
+#summary_table tr td {
+	border: 1px solid black;
+	border-collapse: collapse;
+}
+#summary_table,
+#summary_table tr:first-child,
+#summary_table tr:first-child td {
+	border: none;
+}
+#summary_table tr td:first-child {
+	min-width: 14em;
+	width: 14em;
+	max-width: 14em;
+}
+#date_table tr td, #daily_table tr td {
+	border: 1px solid black;
+	border-collapse: collapse;
+	z-index: 1;
+}
+.apptGroup {
+	background-color: lightgrey;
+	font-weight: bold;
+	height: 1.2em;
+	cursor: default;
+}
+.apptGroupSummary {
+	text-align: left;
+	white-space: nowrap;
+	float: left;
+	width: 100%;
+}
+.apptLoc {
+	background-color: lightgrey;
+}
+.apptDate {
+	text-align: left;
+	cursor: pointer;
+}
+.apptSlot {
+	width: 2.2em;
+	max-width: 2.2em;
+	text-align: right;
+	cursor: pointer;
+}
+.apptSlotMoved {
+	background-color: gold;
+}
+.apptNeed {
+	width: 3em;
+	max-width: 3em;
+	text-align: center;
+	white-space: nowrap;
+	overflow: hidden;
+}
+.apptNameDiv {
+	position: relative;
+}
+.apptNameRes {
+	position: absolute;
+	right: 0;
+	top: 0;
+	text-align: center;
+	border: 1px solid green;
+	border-radius: 0.5em;
+	color: darkgreen;
+	width: 1em;
+	height: 1em;
+	background-color: palegreen;
+	z-index: 2;
+}
+.apptNameUnres {
+	position: absolute;
+	right: 0;
+	top: 0;
+	text-align: center;
+	border: 1px solid red;
+	border-radius: 0.5em;
+	color: red;
+	width: 1em;
+	height: 1em;
+	background-color: pink;
+	z-index: 2;
+}
+.apptNameUnresNot {
+	position: absolute;
+	right: 0;
+	top: 0;
+	text-align: center;
+	color: red;
+	width: 1em;
+	height: 1em;
+	font-size: 120%;
+	font-weight: bold;
+	background-color: transparent;
+	z-index: 3;
+}
+.apptReserved {
+	background-color: palegreen;
+	text-align: center;
+	width: 100%;
+}
+.apptFloat {
+	width: 6em;
+	text-align: center;
+	padding-left: 2px;
+	padding-right: 2px;
+	margin-left: 1px;
+	border: 1px solid grey;
+	float: left;
+}
+.apptPhone {
+	text-align: right;
+	width: 7em;
+	max-width: 7em;
+}
+.apptStatus {
+	width: 13em;
+	max-width: 13em;
+	text-align: left;
+	white-space: nowrap;
+	overflow: hidden;
+}
+
+.custTable, #custList {
+	width: 100%;
+	text-align: left;
+	font-size: 120%;
+}
+.custDelete {
+	border: 1px solid black;
+	background-color: #FFDDDD ;
+	cursor: pointer;
+	font-size: 75%;
+}
+#custCB {
+	font-size: 120%;
+	border: 2px solid green;
+	text-align: center;
+}
+#custButton {
+	background-color: lightgreen;
+	text-align: center;
+}
+.formtext {
+	width: 20em;
+}
+#NeedText {
+	height: 8em;
+}
+#IDApptCancel {
+	background-color: yellow;
+}
+#MoveCancel {
+	background-color: yellow;
+	margin: 1px;
+}
+#IDApptDelete {
+	background-color: pink;
+}
+#IDApptMove {
+	background-color: lightgreen;
+}
+#IDApptSave {
+	background-color: lightgreen;
+}
+#IDApptReserve {
+	background-color: orange;
+}
+#StatusConfirmed, #StatusBusy, #StatusNoAnswer {
+	background-color: lightgreen;
+	width: 28%;
+} 
+#StatusMessageM, #StatusMessageW, #StatusQandA, #StatusNNTF{
+	background-color: #EEE8AA;
+	width: 43%;
+} 
+#StatusOther {
+	width: 73%;
+}
+#StatusText {
+	width: 87%;
+	height: 5em;
+}
+#SearchBox {
+	border: 2px solid black;
+	visibility: hidden;
+	background-color: #AAFFAA;
+	position: absolute;
+	left: 35%;
+	top: 20%;
+	width: 35%;
+	min-width: 30em;
+	z-index: 10;
+	font-size: 100%;
+	text-align: center;
+}
+#FindByNameButton, #FindByPhoneButton, #FindByEmailButton {
+	width: 7em;
+	border: 0, 4px;
+}
+
+#SearchResults {
+	width: 100%;
+	position: relative;
+	max-height: 25em;
+	overflow: auto;
+}
+#search_table {
+	width: 100%;
+}
+#search_table tr td:first-child {
+	width: 1em;
+	cursor: pointer;
+}
+#search_table tr td:nth-child(2) {
+	cursor: pointer;
+	text-align: left;
+}
+#search_table tr td:nth-child(3) {
+	width: 3em;
+	max-width: 3em;
+	cursor: pointer;
+}
+#search_table tr td:nth-child(4) {
+	width: 4em;
+	max-width: 4em;
+	text-align: right;
+	cursor: pointer;
+}
+#FindByVal {
+	width: calc(100% - 1em);
+}
+#HelpClose {
+	background-color: lightgreen;
+	margin: 2px;
+}
+#WaitBox {
+	width: 10em;
+	border: 5px solid red;
+	border-radius: 10px;
+	text-align: center;
+	background-color: #fffefe; /* to match gato */
+	position: fixed;
+	top: 30%;
+	left: calc(50% - 10em);
+	z-index: 99;
+}
+#gato {
+	width: 95%;
+}
