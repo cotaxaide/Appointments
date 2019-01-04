@@ -1312,7 +1312,7 @@ function List_Users($ShowTPs) {
 
 		// Email ----------------------
 		//site_email.style.backgroundColor = "transparent";
-		if ((! initialization_flag) && (site_email.value != "") && (site_email.value.match(/^[\w\.-]+\@[\w-]+\.[\w\.-]+$/) == null)) {
+		if ((! initialization_flag) && (site_email.value != "") && (site_email.value.match(/^[\w\.\-\_]+\@[\w\.\-\_]+\.[\w\.\-\_]+$/) == null))) {
 			alert("Email is not in the correct format");
 			//site_email.style.backgroundColor = "hotpink";
 			return;
@@ -1413,7 +1413,7 @@ function List_Users($ShowTPs) {
 		new_userdata["phone"] = acc_phone.value;
 
 		// Email ----------------------
-		if ((! initialization_flag) && ((acc_email.value == "") || (acc_email.value.match(/^[\w\.-_]+\@[\w\.-_]+\.[\w\.-_]+$/) == null))) {
+		if ((! initialization_flag) && ((acc_email.value == "") || (acc_email.value.match(/^[\w\.\-\_]+\@[\w\.\-\_]+\.[\w\.\-\_]+$/) == null))) {
 			alert("Email is required and is not in the correct format. Must be of the form a@b.c where a, b, and c can have letters, numbers, -, _, or periods.");
 			new_userdata = [];
 			new_userdata["fail"] = true;
@@ -2809,3 +2809,4 @@ function List_Users($ShowTPs) {
 
 
 </body>
+
