@@ -311,7 +311,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 						$_SESSION["UserName"] = $UserName = $id['user_name'];
 						$_SESSION["UserFirst"] = $UserFirst = $id['user_first'];
 						$_SESSION["UserLast"] = $UserLast = $id['user_last'];
-						$_SESSION["UserFullName"] = $UserFirst . "" . $UserLast;
+						$_SESSION["UserFullName"] = $UserFirst . " " . $UserLast;
 						$_SESSION["UserEmail"] = $UserEmail = $id['user_email'];
 						$_SESSION["UserPhone"] = $UserPhone = $id['user_phone'];
 						$_SESSION["UserSiteList"] = $UserSiteList = $id['user_sitelist'];
