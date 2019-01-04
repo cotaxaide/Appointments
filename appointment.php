@@ -2190,7 +2190,7 @@ function InsertNewAppt($iName, $iPhone, $iEmail, $iNeed, $iStatus, $iWait, $iDat
 	$query .= ", `appt_need` = '$iNeed'";
 	$query .= ", `appt_status` = '$iStatus'";
 	$query .= ", `appt_change` = '$MyTimeStamp'";
-	$query .= ", `appt_wait` = " . +$iWait;
+	@$query .= ", `appt_wait` = " . +$iWait;
 	$query .= ", `appt_date` = '$iDate'";
 	$query .= ", `appt_time` = '$iTime'";
 	$query .= ", `appt_location` = " . +$iLoc;
