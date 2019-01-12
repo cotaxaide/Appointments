@@ -1,5 +1,5 @@
 <?php
-// Version 4.05
+// Version 4.07
 
 // Set up environment
 require "environment.php";
@@ -104,8 +104,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 			//session_unset();
 			//session_destroy();
 			// no break
-		case "Login":
 		case "NewUser":
+		case "Login":
 		case "GetPW":
 			$_SESSION["UserIndex"] = 0;
 			$UserIndex = 0;
@@ -202,6 +202,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 				$_SESSION["UserSiteList"] = $UserSiteList = $id['user_sitelist'];
 				$UserPass = $id['user_pass'];
 			}
+			if ($_SESSION["TRACE"]) error_log("INDEX: " . $UserName . ", assigned to " . $UserEmail); 
 		}
 
 		if ($FormLoginEmail == $UserEmail) {
