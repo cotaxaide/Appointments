@@ -1,5 +1,5 @@
 <?php
-//File version 4.08
+//File version 4.09
 //
 // Set up environment
 require "environment.php";
@@ -96,6 +96,7 @@ $UserEmail = $_SESSION["UserEmail"];
 $UserPhone = $_SESSION["UserPhone"];
 $UserOptions = $_SESSION["UserOptions"];
 $UserHome  = $_SESSION["UserHome"];
+$UserSiteList = $_SESSION["UserSiteList"];
 $UserPermissions = intval($UserOptions);
 if ($UserOptions === "A") {
 	$UserPermissions = $ACCESS_ALL | $ADMINISTRATOR;
@@ -375,7 +376,12 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 	} // end of switch
 } // end of POST
 
-if ($_SESSION["TRACE"]) error_log("APPT: " . $UserName . ", view=" . $ApptView . ", action=" . $FormApptNo . ", reason=" . @$FormApptReason);
+if ($_SESSION["TRACE"]) {
+	$log_text = "APPT: " . $UserName . ", view=" . $ApptView . ", action=" . $FormApptNo;
+	if (isset($FormApptReason)) $log_text .= ", reason=" . $FormApptReason;
+	if (isset($FormApptName)) $log_text .=	", name=" . $FormApptName;
+	error_log($log_text);
+}
 
 // Make a list of locations allowed to this user (this could be changed to an array)
 // MaxPermissions is the highest of all - helps control what buttons they see
@@ -450,7 +456,7 @@ while ($row = mysqli_fetch_array($locs)) {
 			}
 
 			// Open the form with the home site checkmarked if none other is
-			if (($ApptView != "ViewUser") AND ($FormApptLoc == "")) {
+			if (($FormApptLoc == "")) {
 				if (((@$_SESSION["UserSiteList"] == "") OR (@$_SESSION["UserSiteList"] == "|")) AND ($SiteIndex == $UserHome)) {
 					$_SESSION["UserSiteList"] = "|" . $UserHome . "|";
 				}
@@ -460,8 +466,8 @@ while ($row = mysqli_fetch_array($locs)) {
 				else {
 					$FormShowInit .= ",0";
 				}
-				//$LocationName[1] .= "<br />" . $SiteIndex . "=" . @$_SESSION["UserSiteList"] . "(" . $FormShowInit . ")"; // DEBUG
 			}
+			//$LocationName[1] .= "<br />" . $SiteIndex . "=" . @$_SESSION["UserSiteList"] . "(" . $FormShowInit . ")"; // DEBUG
 		}
 
 	}
@@ -808,25 +814,27 @@ function Location_Checkboxes() {
 	global $LocationIsOpen;
 
 	$NewUserSitelist = "";
+	$HideCal = ($ApptView == "ViewUser") ? "style='min-height: 100%'" : "";
 
 	if ($LocationList[0] > 0) {
-		echo "<div id='viewSites'>\n";
-		//echo "$FormApptLoc\n"; // DEBUG
-		//echo "$UserSitelist\n"; // DEBUG
+		echo "<div id='viewSites' $HideCal>\n";
+		//echo "a: $FormApptLoc"; // DEBUG
 		echo "<table id='site_table' >\n";
 		$SingleSite = "";
+		$SiteSelected = false;
 		for ($j = 1; $j <= $LocationList[0]; $j++) {
 			$checked = "";
 			$SiteFlag = "";
 			$disabled = "";
 			if ((($ApptView != "ViewUser") OR $LocationIsOpen[$j])
-			AND (@$LocationShow[0] == 1)) {
-			       	$LocationShow[$j] = 1; // if only one, show it
+			AND ($LocationList[0] == 1)) {
+			       	$LocationShow[1] = 1; // if only one, show it
 			}
 			if (@$LocationShow[$j]) {
 				$checked = "checked";
 				if (! $SingleSite) $SingleSite = $LocationList[$j];
 				$NewUserSitelist .= "|" . $LocationList[$j];
+				$SiteSelected = true;
 			}
 			$SiteDBno = "S" . $LocationList[$j];
 			$SitePermission = (isset($SitePermissions[$SiteDBno])) ? $SitePermissions[$SiteDBno] : 0;
@@ -1415,7 +1423,7 @@ function Show_Slots() {
 				}
 				echo "<br />To sign up for an appointment:</b><br /><ol>\n";
 				if ($LocationList[0] > 1) {
-					echo "<li>Select the location you want to consider from the list above the calendar on the left.";
+					echo "<li>Select the location you want to consider from the list on the left.";
 					if ($ShowDagger) echo "<br />(Locations marked with a &quot;&dagger;&quot; will need to speak with you first.)";
 					echo "</li>\n";
 				}
@@ -1817,22 +1825,28 @@ function Send_Email($Request, $View, $Name, $Email, $Date, $Time, $Location) {
 	global $NullDate;
 	global $EM_Reason;
 	global $UserEmail;
+	global $UserName;
 
-	if ($Date == "00/00") return; // no email for move to callback or deleted list
-	if (!($Email > "A")) return; // no email address to send to
 	$LocIndex = $LocationLookup["S" . $Location];
 	$msg = $LocationMessage[$LocIndex];
 	if (substr($msg, 0, 4) == "NONE") return; // messaging has been disabled
 
+	if ($Date == "00/00") return; // no email for move to callback or deleted list
+	if ($Email == "") {
+		if ($_SESSION["TRACE"]) error_log("APPT: " . $UserName . ", No Email address for ". $Name);
+		return; // no email address to send to
+	}
+
 	$Time = Format_Time($Time,true);
 
 	$to = $Email;
-	$headers = "From: " . $LocationName[$LocIndex] . " Tax-Aide\r\n";
-	$reply = $LocationAddress[5];
-	if ($reply != "") {
-		$headers .= "Reply-To: $reply\r\n";
-		$headers .= "Errors-To: $reply\r\n";
+	$headers = "From: " . $LocationName[$LocIndex] . " Tax-Aide";
+	if ($_SESSION["TRACE"]) {
+		$to = $Email . ", aarp@bogarthome.net";
+		//$headers .= "\r\nBCC: trace@bogarthome.net\r\n";
+		error_log("APPT: " . $UserName . ", Email to ". $Email . " " . $headers);
 	}
+	$SiteAddress = explode("|",$LocationAddress[$LocIndex]);
 	$subject = "Your Tax-Aide appointment";
 	switch ($Request) {
 		case "Add":
@@ -1866,6 +1880,7 @@ function Send_Email($Request, $View, $Name, $Email, $Date, $Time, $Location) {
 			$message = str_replace("[WEBSITE]",$SiteAddress[6],$message);
 			$message = str_replace("[STATESITE]",$_SESSION["SystemURL"],$message);
 			$message = str_replace("[CONTACT]",$LocationContact[$LocIndex],$message);
+			$message = wordwrap($message, 70, "\r\n");
 			break;
 		default:
 			return;
@@ -1876,7 +1891,11 @@ function Send_Email($Request, $View, $Name, $Email, $Date, $Time, $Location) {
 	}
 	else {
 		$success = mail($to,$subject,$message,$headers);
-		if (! $success) $Errormessage .= "Not able to send email to $Name at $Email.";
+		if (! $success) {
+			$Errormessage .= "Not able to send email to $Name at $Email.";
+			$emerr = error_get_last()['message'];
+			if ($_SESSION["TRACE"]) error_log("APPT: " . $UserName . ", Email error: ". $emerr);
+		}
 	}
 	$EM_Reason = "";
 }
@@ -1990,7 +2009,7 @@ function Show_Search() {
 
 	if (substr($FormApptNo,0,6) != "FindBy") return;
 
-	if (count($SearchList) > 0) {
+	if (isset($SearchList) && count($SearchList) > 0) {
 		$site = 0;
 		for ($j = 0; $j < count($SearchList); $j++) {
 			$found = $SearchList[$j];
@@ -2614,6 +2633,11 @@ function InsertNewAppt($iName, $iPhone, $iEmail, $iNeed, $iStatus, $iWait, $iDat
 	//===========================================================================================
 		var jmax = +SlotsToAdd.value;
 		if (jmax == 0) return;
+		if (jmax > 50) {
+			alert("You can only add 50 at a time. \n\nClick again if you want to add 50.");
+			SlotsToAdd.value = 50;
+			return;
+		}
 		ApptForm.IDApptSlot.value = "AddCBSlots";
 		ApptForm.IDApptSlotSets.value = jmax;
 		WaitBox.style.display = "block";
@@ -2755,7 +2779,7 @@ function InsertNewAppt($iName, $iPhone, $iEmail, $iNeed, $iStatus, $iWait, $iDat
 	//===========================================================================================
 	function Add_Comment(action) {
 	//===========================================================================================
-		if (IDApptName.value == "") return;
+		if (document.getElementById("IDApptName").value == "") return;
 		switch (action) {
 			case "StatusConfirmed":
 				message = "Confirmed";
@@ -3767,3 +3791,4 @@ function InsertNewAppt($iName, $iPhone, $iEmail, $iNeed, $iStatus, $iWait, $iDat
 		echo "</script>\n";
 	}
 ?>
+

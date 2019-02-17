@@ -1,5 +1,5 @@
 <?php
-// Version 4.07
+// Version 4.08
 
 // Set up environment
 require "environment.php";
@@ -199,6 +199,11 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 				$_SESSION["UserOptions"] = $UserOptions = $id['user_options'];
 				$_SESSION["UserEmail"] = $UserEmail = $id['user_email'];
 				$_SESSION["UserPhone"] = $UserPhone = $id['user_phone'];
+				if ($UserHome == 0) { // is an internet user
+					// limit site list selection to their last appointment site
+					$id['user_sitelist'] = "|";
+					if ($id['user_appt_site'] > 0) $id['user_sitelist'] .= $id['user_appt_site'] . "|";
+				}
 				$_SESSION["UserSiteList"] = $UserSiteList = $id['user_sitelist'];
 				$UserPass = $id['user_pass'];
 			}
@@ -268,14 +273,20 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 					$subject = "Your request from the AARP reservation system";
 					$from = "aarp@cotaxaide.org";
 					$headers = "From: AARP Appointment Manager";
+					if ($_SESSION["TRACE"]) {
+						$headers .= "\r\nBCC: trace@bogarthome.net\r\n";
+					}
 					$message = "Greetings " . $UserFirst . " " . $UserLast . ".\n\n";
 					$message .= "As requested, your password has been reset to \"" . $UserPass . "\".\n";
-					$message .= "Please change your password the next time you sign in.\n\n.";
+					$message .= "Please change your password the next time you sign in.\n\n";
 					if (substr($to,-5,5) == ".test") {
 						$Alert .= "The following email would have been sent:\\n\\n" . str_replace("\n","\\n",$message);
 					}
 					else {
-						mail($to,$subject,$message,$headers);
+						mail($to, $subject, $message, $headers);
+						if ($_SESSION["TRACE"]) {
+							error_log("INDEX: " . $log_id . ", Email sent to " . $to . " from " . $from); 
+						}
 					}
 					$Usermessage .= "You should receive an email message in the next few minutes with a new temporary password.";
 					$UserIndex = $_SESSION["UserIndex"] = 0;
@@ -316,7 +327,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 						$_SESSION["UserEmail"] = $UserEmail = $id['user_email'];
 						$_SESSION["UserPhone"] = $UserPhone = $id['user_phone'];
 						$_SESSION["UserSiteList"] = $UserSiteList = $id['user_sitelist'];
-
 						$_SESSION["UserOptions"] = 0;
 						$_SESSION["UserHome"] = 0;
 						$FormLoginAction = "";
