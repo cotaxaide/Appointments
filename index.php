@@ -1,5 +1,5 @@
 <?php
-// Version 4.08
+// Version 4.09
 
 // Set up environment
 require "environment.php";
@@ -271,11 +271,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
 					$to = $UserEmail;
 					$subject = "Your request from the AARP reservation system";
-					$from = "aarp@cotaxaide.org";
-					$headers = "From: AARP Appointment Manager";
-					if ($_SESSION["TRACE"]) {
-						$headers .= "\r\nBCC: trace@bogarthome.net\r\n";
-					}
+					$from = "noreply@taxaide.res";
+					$headers = "From: AARP Appointment Manager<$from>";
 					$message = "Greetings " . $UserFirst . " " . $UserLast . ".\n\n";
 					$message .= "As requested, your password has been reset to \"" . $UserPass . "\".\n";
 					$message .= "Please change your password the next time you sign in.\n\n";
@@ -285,7 +282,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 					else {
 						mail($to, $subject, $message, $headers);
 						if ($_SESSION["TRACE"]) {
-							error_log("INDEX: " . $log_id . ", Email sent to " . $to . " from " . $from); 
+							error_log("INDEX: " . $log_id . ", Email sent to " . $to . " " . $headers); 
 						}
 					}
 					$Usermessage .= "You should receive an email message in the next few minutes with a new temporary password.";
@@ -900,4 +897,5 @@ function Unique_Email($testId, $testEmail) {
 </div> <!-- init_main -->
 
 </body>
+
 

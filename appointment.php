@@ -1,5 +1,5 @@
 <?php
-//File version 4.09
+//File version 4.10
 //
 // Set up environment
 require "environment.php";
@@ -1837,16 +1837,16 @@ function Send_Email($Request, $View, $Name, $Email, $Date, $Time, $Location) {
 		return; // no email address to send to
 	}
 
+	$SiteAddress = explode("|",$LocationAddress[$LocIndex]);
+
 	$Time = Format_Time($Time,true);
 
 	$to = $Email;
-	$headers = "From: " . $LocationName[$LocIndex] . " Tax-Aide";
+	$from = (isset($SiteAddress[5]) AND ($SiteAddress[5] != "")) ? $SiteAddress[5] : "noreply@appt.sys";
+	$headers = "From: " . $LocationName[$LocIndex] . " Tax-Aide <" . $from . ">";
 	if ($_SESSION["TRACE"]) {
-		$to = $Email . ", aarp@bogarthome.net";
-		//$headers .= "\r\nBCC: trace@bogarthome.net\r\n";
 		error_log("APPT: " . $UserName . ", Email to ". $Email . " " . $headers);
 	}
-	$SiteAddress = explode("|",$LocationAddress[$LocIndex]);
 	$subject = "Your Tax-Aide appointment";
 	switch ($Request) {
 		case "Add":
@@ -1865,7 +1865,6 @@ function Send_Email($Request, $View, $Name, $Email, $Date, $Time, $Location) {
 				$NewMessage .= "We look forward to seeing you on [DATE]\n\n";
 				$NewMessage .= "Your AARP Tax-Aide friends at the [SITENAME].";
 			}
-			$SiteAddress = explode("|",$LocationAddress[$LocIndex]);
 			$message = str_replace("%%","\n",$message);
 			$message = str_replace("[TPNAME]",$Name,$message);
 			$message = str_replace("[TIME]",$Time,$message);
