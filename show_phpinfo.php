@@ -1,1 +1,4 @@
-<?php phpinfo(); ?>
+<?php
+require "environment.php";
+phpinfo();
+?>

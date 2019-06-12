@@ -1,17 +1,13 @@
 <?php
-// Version 4.09
+// Version 5.00
+
+if (! file_exists("opendb.php")) {
+	require "environment.php";
+	exit;
+}
 
 // Set up environment
 require "environment.php";
-
-// Required files
-// sets $USER_TABLE, $SITE_TABLE, $APPT_TABLE and $ACCESS_TABLE
-// plus sets session variables for the signed-in user
-if (file_exists("opendb.php")) require "opendb.php";
-else {
-	header('Location: setup.php');
-	exit;
-}
 
 // Set to true for debugging
 $_SESSION["DEBUG"] = $DEBUG = false;
@@ -121,11 +117,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 		switch ($FormLoginAction) {
 
 			case "ChangeEmail":
-				if (($FormLoginEmail == "") or (! filter_var($FormLoginEmail, FILTER_VALIDATE_EMAIL))) {
-					$Errormessage .= "Please try again. \"$FormLoginEmail\" appears not to be in a recognized email format.";
-					$UserEmail = "";
-					break;
-				}
 
 				// See if email is already in use by other than current user
 				$emailTest = Unique_Email($UserIndex, $FormLoginEmail);
@@ -271,8 +262,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
 					$to = $UserEmail;
 					$subject = "Your request from the AARP reservation system";
-					$from = "noreply@taxaide.res";
-					$headers = "From: AARP Appointment Manager<$from>";
+					$from = "no-reply@tax-aide-reservations.null";
+					$headers = "From: Tax-Aide Appointment Manager<$from>";
 					$message = "Greetings " . $UserFirst . " " . $UserLast . ".\n\n";
 					$message .= "As requested, your password has been reset to \"" . $UserPass . "\".\n";
 					$message .= "Please change your password the next time you sign in.\n\n";
@@ -302,10 +293,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 			$UserName = "";
 			if ($FormLoginAction == "NewUser") { // Set up a new account for a self-registering (internet) user
 				$_SESSION["UserIndex"] = 0;
-				if (! filter_var($FormLoginEmail, FILTER_VALIDATE_EMAIL)) {
-					$Errormessage .= "Your email is not in a recognized format.  Please correct and re-submit.";
-					$UserEmail = "";
-				}
 
     				if ($Errormessage == "") {
 					$query = "INSERT INTO `$USER_TABLE`";
@@ -385,7 +372,7 @@ function Unique_Email($testId, $testEmail) {
 <meta name=description content="AARP Appointments">
 <link rel="SHORTCUT ICON" href="appt.ico">
 <link rel="stylesheet" href="appt.css">
-
+<script src="functions.js"></script>
 <script>
 <?php
 	global $DEBUG, $UserIndex, $UserOptions;
@@ -487,17 +474,11 @@ function Unique_Email($testId, $testEmail) {
 					alert("Please enter your last name.");
 					return;
 				}
-				if (LoginEmail1.value == "") {
-					alert("Please enter your email.");
-					return;
-				}
-				if (LoginPhone1.value == "") {
-					alert ("Please enter your phone number.");
-					return;
-				}
-				LoginForm.LoginPhone.value = LoginPhone1.value;
-				if (Test_Phone()) return;
-				LoginPhone1.value = LoginForm.LoginPhone.value 
+				if (_Verify_Email(LoginEmail1.value, "alert")[0]) return;
+				
+				result = _Verify_Phone(LoginPhone1.value, "alert", "10-dig");
+				if (result[0]) return; // bad phone number
+				LoginForm.LoginPhone.value = LoginPhone1.value = result[1];
 				
 				if ((LoginPass1a.value == "") || (LoginPass1b.value == "")) {
 					alert ("Please enter your password, twice.");
@@ -540,16 +521,14 @@ function Unique_Email($testId, $testEmail) {
 					alert("Your email entries must match");
 					return;
 				}
-				LoginForm.LoginEmail.value = LoginEmail3a.value;
+				results = _Verify_Email(LoginEmail3a.value, "alert");
+				if (results[0]) return; // bad email
+				LoginForm.LoginEmail.value = LoginEmail3a.value = results[1];
 				break;
 			case "ChangePhone":
-				if (LoginPhone3.value == "") {
-					alert("You must enter a new phone number");
-					return;
-				}
-				LoginForm.LoginPhone.value = LoginPhone3.value;
-				badphone = Test_Phone();
-				if (badphone) return;
+				results = _Verify_Phone(LoginPhone3.value, "alert", "10-dig");
+				if (results[0]) return; // bad phone
+				LoginForm.LoginPhone.value = LoginPhone3.value = results[1];
 				break;
 			case "LogOut":
 				break;
@@ -577,29 +556,6 @@ function Unique_Email($testId, $testEmail) {
 	nametotest = nametotest.replace(/'/g,"!");
 	nametotest = nametotest.replace(/"/g,"");
 	return (nametotest);
-	}
-
-	//===========================================================================================
-	function Test_Phone() {
-	//===========================================================================================
-		if ((phnum = LoginForm.LoginPhone.value.trim().replace(/[\s-()]/g,"")) == "") return(1);
-		patt = /[^0-9]/;
-		if (patt.test(phnum)) {
-			alert("The phone number may contain only digits and dashes");
-			return(2);
-		}
-		toll = (phnum.charAt(0) == "1") ? 1:0;
-		if ((phnum.length != 10 + toll) & (phnum.length != 7 + toll)) {
-			alert("Please enter the phone number as a 7 or 10-digit number with an optional \"1\" preceding.");
-			return(3);
-		}
-		if (phnum.length == 7 + toll) {
-			LoginForm.LoginPhone.value = ((toll == 1) ? "1-":"") + phnum.substr(0 + toll,3) + "-" + phnum.substr(3 + toll);
-		}
-		if (phnum.length == 10 + toll) {
-			LoginForm.LoginPhone.value = ((toll == 1) ? "1-":"") + phnum.substr(0 + toll,3) + "-" + phnum.substr(3 + toll,3) + "-" + phnum.substr(6 + toll);
-		}
-		return(0);
 	}
 
 	//===========================================================================================
@@ -733,7 +689,7 @@ function Unique_Email($testId, $testEmail) {
 					<table id="newlogin_data" class="init_data">
 					<tr><td>Email: </td><td><input type="email" id="LoginName0" /></td></tr>
 					<tr><td>Password: </td><td><input type="password" id="LoginPass0" onkeyup="Test_For_Enter(this.id,event);" /></td></tr>
-					<tr><td colspan="2"><input id="LoginRememberMe" type="checkbox" /> Remember me on this PC.</td></tr>
+					<tr><td colspan="2"><input id="LoginRememberMe" type="checkbox" />Remember me on this PC.</td></tr>
 					<tr><td colspan="2" class="action_button"><button id="Login" onclick="Action_Request(this.id)">Sign in</button></td></tr>
 				</table>
 				<span style="text-align: left;">

@@ -1,27 +1,34 @@
-/* Version 4.03 */
-
+/*
+// Version 5.00
 /* for all pages ------------------------------------------------------- */
 
 body {
 	background-color: #FFFFCC;
 }
+
 h1 {
 	margin-bottom: 0;
 }
+
 button {
 	text-align: center;
 	margin: 1em;
 	cursor: pointer;
 }
-input (type="checkbox") {
-	cursor: pointer;
-}
-table td {
-	vertical-align: top;
-}
+
 button:disabled {
 	cursor: not-allowed;
 	}
+
+input [type="checkbox"] {
+	cursor: pointer;
+	width: 1em;
+}
+
+table td {
+	vertical-align: top;
+}
+
 .appt_page_header {
 	position: absolute;
 	top: 0;
@@ -30,27 +37,37 @@ button:disabled {
 	background-color: #FFFFCC;
 	text-align: center;
 }
+
+.page_header {
+	text-align: center;
+}
+
 .menu-buttons {
-	width: calc(100% - 2em);
+	width: calc(100% - 0.8em);
 	border-top: 1px solid black;
 	border-bottom: 1px solid black;
 	font-size:110%;
 	text-align: left;
 	margin: 2px;
 	height: 1.1em;
+	background-color: lightgreen;
 }
+
 .menuButton {
 	padding-right: 1.5em;
 	padding-left: .5em;
 	cursor: pointer;
 	display: inline-block;
 }
+
 .menuButton:hover {
 	font-weight: bold;
 }
+
 .menuButton:hover .menuButtonList {
 	display: block;
 }
+
 .menuButtonList {
 	display: none;
 	position: absolute;
@@ -59,22 +76,27 @@ button:disabled {
 	background-color: lightgreen;
 	z-index: 3;
 }
+
 .menuButtonListItem {
 	font-weight: normal;
 	margin: 2px;
 }
+
 .menuButtonListItem:hover {
 	font-weight: bold;
 }
+
 .help {
 	background-color: yellow;
 	border: 1px solid black;
 	border-radius: .6em;
 	padding: 0 0.3em;
 }
+
 #Excel-icon {
 	height: 1em;
 }
+
 #DebugText {
 	color: red;
 }
@@ -112,10 +134,12 @@ button:disabled {
 #change_history {
 	text-align: left;
 }
+
 #change_history li,
 #change_history ul {
 	line-height: 1em;
 }
+
 .blink {
 	font-weight: bold;
      	color: green;
@@ -143,37 +167,44 @@ button:disabled {
      100% { opacity: 1.0; }
 }
 
-/* ....................... not verified ...........*/
-
-.page_header {
-	text-align: center;
-}
 .bold {
 	font-weight: bold;
 }
+
 .left {
 	text-align: left;
 }
+
 .center {
 	text-align: center;
 }
+
 .hidden { 
 	display: none;
 }
+
 .invisible {
 	visibility: hidden;
 }
+
 .right {
 	text-align: right;
 }
+
 .danger {
 	background-color: hotpink;
 }
+
 .warning {
 	background-color: yellow;
 }
+
 .safe {
 	background-color: lightgreen;
+}
+
+#gato {
+	width: 95%;
 }
 
 /* for setup.php -------------------------------------------------------- */
@@ -205,6 +236,9 @@ button:disabled {
 	border: 2px solid black;
 	padding: 4px;
 }
+#LoginRememberMe {
+	width: 1em;
+}
 #error_message {
 	background-color: pink;
 }
@@ -222,7 +256,7 @@ button:disabled {
 .init_data tr td input {
 	width: 14em;
 }
-.init_data tr td input[type="checkbox"] {
+.init_data tr td input [type="checkbox"] {
 	width: 1em;
 }
 #init_option_box {
@@ -310,7 +344,7 @@ button:disabled {
 
 #system_greeting {
 	width: 95%;
-	height: 30em;
+	height: 26em;
 }
 
 #system_html_div {
@@ -335,32 +369,55 @@ button:disabled {
 	border: 5px solid black;
 }
 
-#system_url_div {
-	font-weight: bold;
-	font-size: 120%;
-	border: 1px solid black;
-	padding: 3px;
+#system_options_div {
+	width: 100%
+	text-decoration: underline;
 }
 
-#system_url {
-	width: calc(100% - 4em);
-}
-
-#system_url_div button {
-	margin: 0;
-	font-size: 60%;
-}
-
-#system_version {
-	width: 100%;
+#system_options_table {
 	margin: auto;
+	padding: 5px;
+	border: 1px solid black;
+}
+
+#system_options_table tr:first-child {
 	font-size: 120%;
 	font-weight: bold;
 	text-align: center;
-	background-color: lightgreen;
+	text-decoration: underline;
 }
 
-/* ....................... not verified ...........*/
+#system_options_table tr td:first-child {
+	text-align: right;
+	text-decoration: underline;
+}
+
+#system_options_table tr td:nth-child(2) {
+	width: 1em;
+}
+
+#system_options_table tr td:nth-child(3) {
+	width: 20em;
+	white-space: nowrap;
+}
+
+#system_options_table tr:first-child td:first-child {
+	text-align: center;
+}
+
+#system_options_div button {
+	margin: 0;
+	font-size: 80%;
+}
+
+#system_url {
+	width: 100%;
+}
+
+#system_email {
+	width: 100%;
+}
+
 #acc_user_list {
 	width: 25em;
 }
@@ -499,10 +556,18 @@ button:disabled {
 	border-top: none;
 	padding: 3px;
 }
+#inet_options {
+	text-align: right;
+}
 #site_client_wait input {
 	text-indent: 2em;
 }
-#user_page, #internet_page {
+#site_reminder,
+#site_lastrem,
+#site_clients_limit {
+	width: 3em;
+}
+#system_page, #user_page, #internet_page {
 	display: none;
 }
 #site_users {
@@ -560,12 +625,12 @@ button:disabled {
 #inet_list_table tr td:nth-child(2) {
 	text-align: right;
 }
-#inet_list_table tr td:nth-child(4),
-#inet_list_table tr td:nth-child(5) {
-	text-align: center;
-}
-#user_list_table tr td:nth-child(7),
-#inet_list_table tr td:nth-child(7) {
+//#inet_list_table tr td:nth-child(4),
+//#inet_list_table tr td:nth-child(5) {
+//	text-align: center;
+//}
+#user_list_table tr td:nth-child(8),
+#inet_list_table tr td:nth-child(8) {
 	display: none;
 }
 .user_list_site {
@@ -590,9 +655,60 @@ button:disabled {
 	padding: 0;
 }
 
+#user_search_box {
+	border: 2px solid black;
+	visibility: hidden;
+	background-color: #AAFFAA;
+	position: absolute;
+	left: 15%;
+	top: 13em;
+	width: 65%;
+	min-width: 50em;
+	z-index: 4;
+	font-size: 100%;
+	text-align: center;
+}
+
+#user_search_results {
+	width: 100%;
+	position: relative;
+	max-height: 25em;
+	overflow: auto;
+}
+
+#user_search_table {
+	width: 100%;
+	cursor: pointer;
+	text-align: left;
+}
+
+#user_search_table tr:first-child td {
+	font-weight: bold;
+	text-decoration: underline;
+}
+
+#user_search_table tr td:first-child {
+	width: 1em;
+	font-size: 110%;
+	max-width: 1em;
+}
+#user_search_table tr td:nth-child(2) {
+	width: 5em;
+	min-width: 5em;
+}
+#user_search_table tr td:nth-child(3) {
+	width: 5em;
+	min-width: 5em;
+}
+#user_search_table tr td:nth-child(4) {
+	width: 5em;
+	min-width: 5em;
+}
+
+
 /* for appointment.php -------------------------------------------------- */
 
-.sidebar {
+#sidebarDiv {
 	max-width: 17em;
 	min-width: 17em;
 	position: absolute;
@@ -603,18 +719,33 @@ button:disabled {
 	bottom: .5em;
 	overflow: hidden;
 }
+
+#subSidebar {
+	width: 100%;
+	position: absolute;
+	top: 3em;
+	bottom: 0;
+	border-top: 1px solid black;
+}
+
+#viewSites {
+	width: 100%;
+	overflow-y: auto;
+	max-height: 50%;
+	border-bottom: 1px solid black;
+}
 .slots {
 	position: absolute;
 	top: 7em;
 	left: 19em;
 	bottom: .5em;
-	width: calc(100% - 18em);
+	width: calc(100% - 20em);
 }
 .slotdate {
 	position: absolute;
 	top: 0;
 	height: 1.15em;
-	width: calc(100% - 2.2em);
+	width: 100%;
 }
 .slotlist {
 	position: absolute;
@@ -622,7 +753,7 @@ button:disabled {
 	bottom: 0;
 	overflow-x: hidden;
 	overflow-y: scroll;
-	width: calc(100% - 1.1em);
+	width: 100%;
 }
 .slotuser {
 	position: absolute;
@@ -630,7 +761,7 @@ button:disabled {
 	bottom: 0;
 	overflow-x: hidden;
 	overflow-y: auto;
-	width: calc(100% - 1.1em);
+	width: 100%;
 }
 #viewButtons {
 	height: 3em;
@@ -650,60 +781,25 @@ button:disabled {
 	font-size: 0.65em;
 	z-index: 2;
 }
-#viewSites {
-	min-height: 5%;
-	max-height: calc(100% - 29em);
+#SiteBoxDiv {
+	min-height: 3em;
 	width: 100%;
-	overflow-y: auto;
-	border-top: 1px solid black;
-	border-bottom: 1px solid black;
 }
 #viewCal {
 	position: relative;
-	min-height: 30%;
 	width: 100%;
-	overflow-y: hidden;
+	min-height: 50%;
+	overflow-y: scroll;
+}
+#CalBoxDiv {
+	width: 100%;
 	border-bottom: 1px solid black;
 }
-#calSide {
-	position: absolute;
-	top: 0;
-	right: 0;
-	height: 30em;
-	z-index: 1;
-	width: 1em;
-	cursor: default;
-	background-color: rgb(205,205,205);
-	overflow: hidden;
-}
-#calUp {
-	position: absolute;
-	top: 0;
-	right: 0;
-	z-index: 2;
-	height: 2.5em;
-	width: 1em;
-	cursor: pointer;
-	font-weight: bold;
-	background-color: rgb(240,240,240);
-	overflow: visible;
-}
-#calDown {
-	position: absolute;
-	bottom: 0;
-	right: 0;
-	z-index: 2;
-	height: 2.5em;
-	line-height: 50%;
-	width: 1em;
-	cursor: pointer;
-	font-weight: bold;
-	background-color: rgb(240,240,240);
-	overflow: visible;
-}
+
 .user_class {
 	background-color: lightblue;
 }
+
 .reserved_class {
 	background-color: palegreen;
 	text-align: center;
@@ -720,9 +816,11 @@ button:disabled {
 	border: 3px solid black;
 	background-color: #FFFFAA;
 	position: fixed;
-	top: 30%;
+	top: 20%;
 	z-index: 20;
 	font-size: 120%;
+	max-height: 70%;
+	overflow-x: auto;
 }
 #MoveBox {
 	border-color: #000000;
@@ -743,8 +841,14 @@ button:disabled {
 	width: 8em;
 }
 #ApptTitle {
+	background-color: lightgreen;
+	border-bottom: 1px solid black;
+	padding: 5px;
 	text-align: center;
 	font-weight: bold;
+}
+#ApptDataDiv {
+	overflow-y: auto;
 }
 #ApptFormBox, #ApptHistoryBox {
 	width: 20em;
@@ -752,6 +856,7 @@ button:disabled {
 }
 #ApptButtonBox {
 	width: 100%;
+	border-top: 1px solid black;
 	text-align: center;
 }
 #ApptDataTable:first-child {
@@ -805,42 +910,54 @@ button:disabled {
 	visibility: hidden;
 	background-color: #AAFFAA;
 	position: fixed;
+	min-width: 35em;
 	left: 30%;
 	top: 20%;
-	z-index: -1;
+	z-index: 6;
 	font-size: 100%;
 	text-align: center;
 	padding: 3px;
 }
 #SlotBoxTable {
-	width: 100%;
+	width: 27em;
 	text-align: center;
 }
 #SlotBoxTable tr td {
-	width: 3em;
+	width: 2em;
+	border: 1px solid black;
+	border-collapse: collapse;
 }
 #SlotStart, #SlotStop {
-	width: 9em;
+	width: 10em;
 }
 #SBGoButton {
 	background-color: hotpink;
 }
 #SBTitle {
-	position: relative;
 	width: 100%;
 	font-weight: bold;
 	font-size: 1.2em;
 	background-color: lightgreen;
-	border: 1px solid black;
+	border-bottom: 1px solid black;
 	margin-bottom: 5px;
+}
+#SBPatternSaveButtons,
+#SBPatternSave,
+#SBPatternDelete,
+#SBPatterns {
+	display: none;
+}
+
+.SBOptClass {
+	width: 100%;
 }
 #SlotBoxClose {
 	position: absolute;
 	top: -1px;
 	width: 2em;
 	right: -1px;
-	border: 1px solid black;
 	cursor: pointer;
+	font-size: 150%;
 }
 .Do1Slot {
 	display: inline-block;
@@ -863,7 +980,7 @@ button:disabled {
 	cursor: pointer;
 }
 .calTable {
-	width: calc(99% - 1em);
+	width: 100%;
 	font-size: 100%;
 }
 .calTable tr td {
@@ -951,7 +1068,8 @@ button:disabled {
 	width: 14em;
 	max-width: 14em;
 }
-#date_table tr td, #daily_table tr td {
+#date_table tr td,
+#daily_table tr td {
 	border: 1px solid black;
 	border-collapse: collapse;
 	z-index: 1;
@@ -1060,6 +1178,10 @@ button:disabled {
 	overflow: hidden;
 }
 
+.apptFill {
+	width: 0.84em;
+}
+
 .custTable, #custList {
 	width: 100%;
 	text-align: left;
@@ -1084,6 +1206,9 @@ button:disabled {
 	width: 20em;
 }
 #NeedText {
+	height: 3em;
+}
+#InfoText {
 	height: 8em;
 }
 #IDApptCancel {
@@ -1105,11 +1230,17 @@ button:disabled {
 #IDApptReserve {
 	background-color: orange;
 }
+#IDApptSendEmail {
+	background-color: lightblue;
+}
 #StatusConfirmed, #StatusBusy, #StatusNoAnswer {
 	background-color: lightgreen;
 	width: 28%;
 } 
-#StatusMessageM, #StatusMessageW, #StatusQandA, #StatusNNTF{
+#StatusMessageM,
+#StatusMessageW,
+#StatusQandA,
+#StatusNNTF {
 	background-color: #EEE8AA;
 	width: 43%;
 } 
@@ -1118,7 +1249,7 @@ button:disabled {
 }
 #StatusText {
 	width: 87%;
-	height: 5em;
+	height: 18.3em;
 }
 #SearchBox {
 	border: 2px solid black;
@@ -1168,6 +1299,7 @@ button:disabled {
 }
 #FindByVal {
 	width: calc(100% - 1em);
+	max-width: 25em;
 }
 #HelpClose {
 	background-color: lightgreen;
@@ -1183,7 +1315,5 @@ button:disabled {
 	top: 30%;
 	left: calc(50% - 10em);
 	z-index: 99;
-}
-#gato {
-	width: 95%;
+	overflow-y: auto;
 }

@@ -1,5 +1,5 @@
 <?PHP
-//Version 4.01
+//Version 5.00
 
 // Set up environment
 require "environment.php";
@@ -11,10 +11,6 @@ if (@$_SESSION["UserIndex"] == 0) {
 	header('Location: index.php'); // prevents direct access to this page (must sign in first).
 	exit;
 }
-
-// Connect to database
-// sets $USER_TABLE, $ACCESS_TABLE, $APPT_TABLE, $SITE_TABLE
-require "opendb.php";
 
 // file name for download
 $LocationList = explode("|",@$_SESSION["UserSiteList"]);
@@ -28,7 +24,7 @@ $DelList = "";
 $RESERVED = "&laquo; R E S E R V E D &raquo;";
 
 // Print column headers
-echo "LOCATION\tDATE\tTIME\tNAME\tEMAIL\tPHONE\tNEED\tSTATUS\tWAIT #\tSITE #\n";
+echo "LOCATION\tDATE\tTIME\tNAME\tEMAIL\tEMAIL SENT\tPHONE\tTAGS\tFOOTNOTES\tADDITIONAL INFO\tSTATUS\n";
 
 $query = "SELECT * FROM $APPT_TABLE";
 $query .= " LEFT JOIN $SITE_TABLE";
@@ -50,25 +46,31 @@ while($row = mysqli_fetch_array($appointments)) {
 		$Appt = $row["appt_no"];
 		$Date = $row["appt_date"];
 		$Time = substr($row["appt_time"],0,5);
-		$Name = str_replace("!","'",htmlspecialchars_decode($row["appt_name"]));
+		$Name = str_replace("!", "'", htmlspecialchars_decode($row["appt_name"]));
+		if ($Name != $RESERVED) $Name = str_replace("&amp;", "&", $Name);
 		$Email = $row["appt_email"];
+		$Emailsent = $row["appt_emailsent"];
 		$Phone = $row["appt_phone"];
 		$Type = $row["appt_type"];
-		$Need = str_replace("%%","; ",$row["appt_need"]);
-		$Status = str_replace("%%","; ",$row["appt_status"]);
+		$Tags = $row["appt_tags"];
+		$Notes = str_replace("%%", "; ", htmlspecialchars_decode($row["appt_need"]));
+		$Notes = str_replace("&amp;", "&", $Notes);
+		$Info = str_replace("%%", "; ", htmlspecialchars_decode($row["appt_info"]));
+		$Info = str_replace("&amp;", "&", $Info);
+		$Status = str_replace("%%", "; ", htmlspecialchars_decode($row["appt_status"]));
+		$Status = str_replace("&amp;", "&", $Status);
 
 		if (($Name != "") and ($Name != $RESERVED)) {
 			if ($Date == $NullDate) {
 				if ($Type == "D") {
-					$DelList .= "$Site\tDeleted\tList\t$Name\t$Email\t$Phone\t$Need\t$Status\t\t$Location\n";
+					$DelList .= "$Site\tDeleted\tList\t$Name\t$Email\t$Emailsent\t$Phone\t$Tags\t$Notes\t$Info\t$Status\n";
 				}
 				else {
-					$Wait = $row["appt_wait"];
-					$CBList .= "$Site\tCallback\tList\t$Name\t$Email\t$Phone\t$Need\t$Status\t$Wait\t$Location\n";
+					$CBList .= "$Site\tCallback\tList\t$Name\t$Email\t$Emailsent\t$Phone\t$Tags\t$Notes\t$Info\t$Status\n";
 				}
 			}
 			else {
-				echo "$Site\t$Date\t$Time\t$Name\t$Email\t$Phone\t$Need\t$Status\t\t$Location\n";
+				echo "$Site\t$Date\t$Time\t$Name\t$Email\t$Emailsent\t$Phone\t$Tags\t$Notes\t$Info\t$Status\n";
 			}
 		}
 	}

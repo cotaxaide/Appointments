@@ -1,9 +1,5 @@
 <?php
-//session_start();
-// --------------------------- VERSION HISTORY ----------------------------------
-$VERSION = "4.02";
-$_SESSION['SystemVersion'] = $VERSION;
-$DEBUG = false;
+$VERSION = "5.00";
 
 // This routine is the first to run when a new installation is encountered.
 // It is run by the index.php routine when the opendb.php file is not present.
@@ -16,150 +12,184 @@ $DEBUG = false;
 
 //--------------------------------- GLOBAL VARIABLES -----------------------------------
 $initialize = "none";
-$opendb_filename = "opendb.php";
-if ($DEBUG) $opendb_filename = "opendb_test.php";
 
 $USER_TABLE = "taxappt_users";
 $ACCESS_TABLE = "taxappt_access";
 $APPT_TABLE = "taxappt_appts";
 $SITE_TABLE = "taxappt_sites";
 $SYSTEM_TABLE = "taxappt_system";
+$SCHED_TABLE = "taxappt_scheds";
 
 $admin_first = "";
 $admin_last = "";
 $admin_email = "";
 $admin_phone = "";
 $admin_sitename = "";
+$system_email = "";
 $host = "localhost";
 $dbname = "";
 $dbuserid = "";
 $dbpassword = "";
 $systemURL = "";
+$sysNotice = "";
 $errormessage = "";
 
-if ($DEBUG) echo "checking for $opendb_filename<br />";
-if (is_file($opendb_filename)) include $opendb_filename;
+	// error_log("SETUP DEBUG: starting setup.php, Session ID = " . session_id());
+if (file_exists("opendb.php")) {
 
-if ($dbname) {
-	if ($DEBUG) echo "$opendb_filename was found with dbname = $dbname.<br />";
+	// open it
+	//error_log("SETUP DEBUG: opening opendb.php, Session ID = " . session_id());
+	require_once "opendb.php";
 
-	// Confirm that tables and table columns match the current specifications
-	Configure_Database();
-
-	// exit this routine and go to site management
-	if ($DEBUG) exit("EXITED DUE TO DEBUGGING!");
+	//  confirm that tables and table columns match the current specifications
+	$query = "SELECT * FROM $SYSTEM_TABLE";
+	$result = mysqli_query($dbcon, $query);
+	$row = mysqli_fetch_array($result); // only one row
+	$_SESSION["SystemVersion"] = $row['system_version'];
+	$_SESSION["SystemGreeting"] = $row['system_greeting'];
+	$_SESSION["SystemNotice"] = $row['system_notice'];
+	$_SESSION["SystemInfo"] = $row['system_info'];
+	$_SESSION["SystemURL"] = $row['system_url'];
+	$_SESSION["TRACE"] = $row['system_trace'];
+	// New in version 5.00
+	$_SESSION["SystemEmail"] = $system_email = (isset($row['system_email'])) ? $row['system_email'] : "" ;
+	$_SESSION["SystemReminders"] = (isset($row['system_reminders'])) ? $row['system_reminders'] : "" ;
+	if ($_SESSION["SystemVersion"] != $VERSION) {
+		Configure_Database();
+		if ($_SESSION["TRACE"]) error_log("SETUP: Database updated from version " . $_SESSION["SystemVersion"] . " to $VERSION.");
+		exit("Your database has been updated from version " . $_SESSION["SystemVersion"] . " to $VERSION.\n\nPlease close your browser and restart the appointment system.");
+		}
 	return;
 }
-else {
-	if ($DEBUG) echo "$opendb_filename doesn&apos;t exist - create it.<br />";
 
-	if ($_SERVER["REQUEST_METHOD"] == "POST") {
-		$admin_first = htmlspecialchars(stripslashes(trim($_POST["admin_first"])));
-		$admin_last = htmlspecialchars(stripslashes(trim($_POST["admin_last"])));
-		$admin_email = htmlspecialchars(stripslashes(trim($_POST["admin_email"])));
-		$admin_phone = htmlspecialchars(stripslashes(trim($_POST["admin_phone"])));
-		$admin_sitename = htmlspecialchars(stripslashes(trim($_POST["admin_sitename"])));
-		$host = htmlspecialchars(stripslashes(trim($_POST["host"])));
-		$dbname = htmlspecialchars(stripslashes(trim($_POST["dbname"])));
-		$dbuserid = htmlspecialchars(stripslashes(trim($_POST["dbuserid"])));
-		$dbpassword = htmlspecialchars(stripslashes(trim($_POST["dbpassword"])));
-		$dbtimezone = htmlspecialchars(stripslashes(trim($_POST["dbtimezone"])));
-		$systemURL = htmlspecialchars(trim($_POST["systemURL"]));
-		$admin_name = $admin_first . substr($admin_last,0,1); 
+// opendb.php does not exist
+// error_log("SETUP DEBUG: no opendb.php, Session ID = " . session_id());
+if (isset($_SERVER["HTTP_REFERER"]) && (strpos($_SERVER["HTTP_REFERER"], "reminders.php"))) return; // this is being run from reminders.php
+if ($_SERVER["REQUEST_METHOD"] == "POST") {
+	$admin_first = htmlspecialchars(stripslashes(trim($_POST["admin_first"])));
+	$admin_last = htmlspecialchars(stripslashes(trim($_POST["admin_last"])));
+	$admin_email = htmlspecialchars(stripslashes(trim($_POST["admin_email"])));
+	$admin_phone = htmlspecialchars(stripslashes(trim($_POST["admin_phone"])));
+	$admin_sitename = htmlspecialchars(stripslashes(trim($_POST["admin_sitename"])));
+	$host = htmlspecialchars(stripslashes(trim($_POST["host"])));
+	$dbname = htmlspecialchars(stripslashes(trim($_POST["dbname"])));
+	$dbuserid = htmlspecialchars(stripslashes(trim($_POST["dbuserid"])));
+	$dbpassword = htmlspecialchars(stripslashes(trim($_POST["dbpassword"])));
+	$dbtimezone = htmlspecialchars(stripslashes(trim($_POST["dbtimezone"])));
+	$systemURL = htmlspecialchars(trim($_POST["systemURL"]));
+	$admin_name = $admin_first . substr($admin_last,0,1); 
 
-		//Try to connect to the database
-		if (! $host) $host = "localhost";
-		if ($DEBUG) echo "Connecting to $dbname on $host using $dbuserid:$dbpassword</br>";
-		$dbcon = mysqli_connect($host, $dbuserid, $dbpassword, $dbname);
+	//Try to connect to the database
+	if (! $host) $host = "localhost";
+	$dbcon = mysqli_connect($host, $dbuserid, $dbpassword, $dbname);
 
-		if (mysqli_connect_errno()) {
-			$initialize = "fail";
-			$errormessage = mysqli_connect_error();
-		}
-		else {
-			if ($DEBUG) echo "Success<br />";
-			$initialize = "pass";
-			mysqli_select_db($dbcon, $dbname);
-			Create_Opendb_FIle($host, $dbuserid, $dbpassword, $dbname);
-			if ($DEBUG) echo "CONFIGURING $dbname<br />";
-			Configure_Database(); // add the tables
-			if ($DEBUG) echo "ADDING ADMIN $admin_first $admin_last<br />";
-			Add_Admin($admin_sitename, $admin_first, $admin_last, $admin_email, $admin_phone, $admin_name);
-			$_SESSION['SystemVersion'] = $VERSION;
-			$_SESSION['UserIndex'] = 1;
-			$_SESSION['UserName'] = $admin_name;
-			$_SESSION['UserHome'] = 2;
-			$_SESSION['UserPass'] = "admin";
-			$_SESSION['UserEmail'] = $admin_email;
-			$_SESSION['UserPhone'] = $admin_phone;
-			$_SESSION['UserFirst'] = $admin_first;
-			$_SESSION['UserLast'] = $admin_last;
-			$_SESSION['UserFullName'] = "$admin_first $admin_last";
-			$_SESSION['UserOptions'] = "A";
-
-			// Add done, go to the management routine
-			header('Location: sitemanage.php');
-		}
+	if (mysqli_connect_errno()) {
+		$initialize = "fail";
+		$errormessage = mysqli_connect_error();
 	}
-} // end of main routine
+	else {
+		$initialize = "pass";
+		mysqli_select_db($dbcon, $dbname);
+		Create_Opendb_FIle($host, $dbuserid, $dbpassword, $dbname);
+		Configure_Database(); // add the tables
+		Add_Admin($admin_sitename, $admin_first, $admin_last, $admin_email, $admin_phone, $admin_name);
+
+		$_SESSION['SystemVersion'] = $VERSION;
+		$_SESSION['UserIndex'] = 1;
+		$_SESSION['UserName'] = $admin_name;
+		$_SESSION['UserHome'] = 2;
+		$_SESSION['UserPass'] = "admin";
+		$_SESSION['UserEmail'] = $admin_email;
+		$_SESSION['UserPhone'] = $admin_phone;
+		$_SESSION['UserFirst'] = $admin_first;
+		$_SESSION['UserLast'] = $admin_last;
+		$_SESSION['UserFullName'] = "$admin_first $admin_last";
+		$_SESSION['UserOptions'] = "A";
+		// All done, go to the management routine
+		// error_log("SETUP DEBUG: Going to sitemanage.php");
+		header('Location: sitemanage.php');
+		// error_log("SETUP DEBUG: Came back from sitemanage.php after a header");
+	}
+}
 
 //----------------------------------------------------------------------------
 function Configure_Database() {
 // This function describes the database structure and calls other functions
 // to add tables and columns as needed.
 //----------------------------------------------------------------------------
-global $USER_TABLE, $ACCESS_TABLE, $APPT_TABLE, $SITE_TABLE, $SYSTEM_TABLE;
+// error_log("SETUP DEBUG: Making the database");
 
+global $SYSTEM_TABLE;
 Configure_Table($SYSTEM_TABLE, "system_index", "INT AUTO_INCREMENT PRIMARY KEY NOT NULL");
-Configure_Column($SYSTEM_TABLE, "system_version", "VARCHAR(50)");
-Configure_Column($SYSTEM_TABLE, "system_greeting", "TEXT");
-Configure_Column($SYSTEM_TABLE, "system_notice", "TEXT");
-Configure_Column($SYSTEM_TABLE, "system_info", "TEXT");
-Configure_Column($SYSTEM_TABLE, "system_url", "TEXT");
-Configure_Column($SYSTEM_TABLE, "system_trace", "VARCHAR(1)");
+Configure_Column($SYSTEM_TABLE, "system_version", "VARCHAR(50) DEFAULT ''");
+Configure_Column($SYSTEM_TABLE, "system_greeting", "TEXT DEFAULT ''");
+Configure_Column($SYSTEM_TABLE, "system_notice", "TEXT DEFAULT ''");
+Configure_Column($SYSTEM_TABLE, "system_info", "TEXT DEFAULT ''");
+Configure_Column($SYSTEM_TABLE, "system_url", "TEXT DEFAULT ''");
+Configure_Column($SYSTEM_TABLE, "system_email", "TEXT DEFAULT ''");
+Configure_Column($SYSTEM_TABLE, "system_reminders", "TEXT DEFAULT ''");
+Configure_Column($SYSTEM_TABLE, "system_trace", "VARCHAR(1) DEFAULT ''");
+
+global $ACCESS_TABLE;
 Configure_Table($ACCESS_TABLE, "acc_index", "BIGINT AUTO_INCREMENT PRIMARY KEY NOT NULL");
 Configure_Column($ACCESS_TABLE, "acc_location", "BIGINT UNSIGNED");
 Configure_Column($ACCESS_TABLE, "acc_user", "BIGINT UNSIGNED");
 Configure_Column($ACCESS_TABLE, "acc_owner", "BIGINT UNSIGNED");
-Configure_Column($ACCESS_TABLE, "acc_option", "TINYTEXT");
+Configure_Column($ACCESS_TABLE, "acc_option", "TINYTEXT DEFAULT ''");
+
+global $USER_TABLE;
 Configure_Table($USER_TABLE, "user_index", "BIGINT AUTO_INCREMENT PRIMARY KEY NOT NULL");
-Configure_Column($USER_TABLE, "user_name", "VARCHAR(50)");
-Configure_Column($USER_TABLE, "user_email", "VARCHAR(256)");
-Configure_Column($USER_TABLE, "user_phone", "VARCHAR(20)");
-Configure_Column($USER_TABLE, "user_pass", "VARCHAR(100)");
-Configure_Column($USER_TABLE, "user_last", "VARCHAR(50)");
-Configure_Column($USER_TABLE, "user_first", "VARCHAR(50)");
+Configure_Column($USER_TABLE, "user_name", "VARCHAR(50) DEFAULT ''");
+Configure_Column($USER_TABLE, "user_email", "VARCHAR(256) DEFAULT ''");
+Configure_Column($USER_TABLE, "user_phone", "VARCHAR(25) DEFAULT ''");
+Configure_Column($USER_TABLE, "user_pass", "VARCHAR(100) DEFAULT ''");
+Configure_Column($USER_TABLE, "user_last", "VARCHAR(50) DEFAULT ''");
+Configure_Column($USER_TABLE, "user_first", "VARCHAR(50) DEFAULT ''");
 Configure_Column($USER_TABLE, "user_home", "BIGINT");
 Configure_Column($USER_TABLE, "user_appt_site", "BIGINT");
-Configure_Column($USER_TABLE, "user_options", "TEXT");
-Configure_Column($USER_TABLE, "user_sitelist", "TEXT");
+Configure_Column($USER_TABLE, "user_options", "TEXT DEFAULT ''");
+Configure_Column($USER_TABLE, "user_sitelist", "TEXT DEFAULT ''");
 Configure_Column($USER_TABLE, "user_lastlogin", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP");
+
+global $SITE_TABLE;
 Configure_Table($SITE_TABLE, "site_index", "BIGINT AUTO_INCREMENT PRIMARY KEY NOT NULL");
-Configure_Column($SITE_TABLE, "site_name", "TEXT");
-Configure_Column($SITE_TABLE, "site_address", "TEXT");
-Configure_Column($SITE_TABLE, "site_inet", "VARCHAR(1)");
-Configure_Column($SITE_TABLE, "site_contact", "TEXT");
-Configure_Column($SITE_TABLE, "site_message", "TEXT");
+Configure_Column($SITE_TABLE, "site_name", "TEXT DEFAULT ''");
+Configure_Column($SITE_TABLE, "site_address", "TEXT DEFAULT ''");
+Configure_Column($SITE_TABLE, "site_inet", "TEXT DEFAULT ''");
+Configure_Column($SITE_TABLE, "site_contact", "TEXT DEFAULT ''");
+Configure_Column($SITE_TABLE, "site_message", "TEXT DEFAULT ''");
 Configure_Column($SITE_TABLE, "site_addedby", "BIGINT");
 Configure_Column($SITE_TABLE, "site_open", "DATE");
 Configure_Column($SITE_TABLE, "site_closed", "DATE");
-Configure_Column($SITE_TABLE, "site_schedule", "TEXT");
-Configure_Column($SITE_TABLE, "site_help", "TEXT");
-Configure_Column($SITE_TABLE, "site_sumres", "TEXT");
+Configure_Column($SITE_TABLE, "site_reminder", "TEXT DEFAULT ''");
+Configure_Column($SITE_TABLE, "site_lastrem", "TEXT DEFAULT ''");
+Configure_Column($SITE_TABLE, "site_help", "TEXT DEFAULT ''");
+Configure_Column($SITE_TABLE, "site_sumres", "TEXT DEFAULT ''");
+Configure_Column($SITE_TABLE, "site_10dig", "TEXT DEFAULT ''");
+
+global $APPT_TABLE;
 Configure_Table($APPT_TABLE, "appt_no", "BIGINT AUTO_INCREMENT PRIMARY KEY NOT NULL");
 Configure_Column($APPT_TABLE, "appt_date", "DATE DEFAULT '0000-00-00' NOT NULL");
 Configure_Column($APPT_TABLE, "appt_time", "TIME");
-Configure_Column($APPT_TABLE, "appt_name", "TEXT");
+Configure_Column($APPT_TABLE, "appt_name", "TEXT DEFAULT ''");
 Configure_Column($APPT_TABLE, "appt_location", "BIGINT");
 Configure_Column($APPT_TABLE, "appt_email", "VARCHAR(256)");
+Configure_Column($APPT_TABLE, "appt_emailsent", "DATE");
 Configure_Column($APPT_TABLE, "appt_phone", "VARCHAR(50)");
-Configure_Column($APPT_TABLE, "appt_need", "TEXT");
-Configure_Column($APPT_TABLE, "appt_status", "TEXT");
-Configure_Column($APPT_TABLE, "appt_tracking", "TEXT");
+Configure_Column($APPT_TABLE, "appt_tags", "TEXT DEFAULT ''");
+Configure_Column($APPT_TABLE, "appt_need", "TEXT DEFAULT ''");
+Configure_Column($APPT_TABLE, "appt_info", "TEXT DEFAULT ''");
+Configure_Column($APPT_TABLE, "appt_status", "TEXT DEFAULT ''");
 Configure_Column($APPT_TABLE, "appt_wait", "BIGINT");
 Configure_Column($APPT_TABLE, "appt_change", "DATETIME");
-Configure_Column($APPT_TABLE, "appt_by", "TEXT");
+Configure_Column($APPT_TABLE, "appt_by", "TEXT DEFAULT ''");
 Configure_Column($APPT_TABLE, "appt_type", "VARCHAR(1)");
+
+global $SCHED_TABLE;
+Configure_Table($SCHED_TABLE, "sched_index", "INT AUTO_INCREMENT PRIMARY KEY NOT NULL");
+Configure_Column($SCHED_TABLE, "sched_location", "BIGINT");
+Configure_Column($SCHED_TABLE, "sched_name", "TEXT DEFAULT ''");
+Configure_Column($SCHED_TABLE, "sched_pattern", "TEXT DEFAULT ''");
 Update_Version();
 }
 
@@ -171,12 +201,9 @@ function Configure_Table($tablename, $indexname, $optionlist) {
 	global $dbcon;
 
 	// add the table if it doesn't exist
-	if ($DEBUG) echo "<br />TBL: $dbname.$tablename, $indexname, $optionlist <br />";
 	$query = "CREATE TABLE `$tablename`"; 
 	$query .= " (`$indexname` $optionlist)";
-	if ($DEBUG) echo "QRY: $query<br />";
 	mysqli_query($dbcon, $query);
-	if ($DEBUG) echo "RES: " . mysqli_error($dbcon) . "<br />";
 }
 
 //----------------------------------------------------------------------------
@@ -187,21 +214,15 @@ function Configure_Column($tablename, $columnname, $optionlist) {
 	global $dbcon;
 
 	// determine if the column exists
-	if ($DEBUG) echo "&nbsp;&nbsp;&nbsp;COL: $tablename, $columnname, $optionlist <br />";
 	$query = "SELECT `$columnname` FROM `$tablename`";
 	$query .= " WHERE 1";
-	if ($DEBUG) echo "&nbsp;&nbsp;&nbsp;QRY: $query<br />";
 	mysqli_query($dbcon, $query);
-	if ($DEBUG) echo "&nbsp;&nbsp;&nbsp;RES: " . mysqli_error($dbcon) . "<br />";
-	$action = (mysqli_error($dbcon) != "") ? "ADD":"MODIFY";
+	$action = (mysqli_error($dbcon) != "") ? "ADD" : "MODIFY";
 
 	// either add or modify the column's characteristics
 	$query = "ALTER TABLE `$tablename`";
 	$query .= " $action COLUMN `$columnname` $optionlist";
-	if ($DEBUG) echo "&nbsp;&nbsp;&nbsp;QRY: $query<br />";
 	mysqli_query($dbcon, $query);
-	if ($DEBUG) echo "&nbsp;&nbsp;&nbsp;RES: " . mysqli_error($dbcon) . "<br />";
-	if ($DEBUG) echo "&nbsp;&nbsp;&nbsp;---<br />";
 }
 
 //----------------------------------------------------------------------------
@@ -212,41 +233,44 @@ function Update_Version() {
 	global $VERSION;
 	global $systemURL;
 	global $dbcon;
+	global $system_email;
+	if ($system_email == "") $system_email = "no_reply@tax_aide_reservations.no_email";
+	$sysNotice = Notice();
 
 	$query = "INSERT INTO $SYSTEM_TABLE";
 	$query .= " SET `system_index` = 1";
 	$query .= ", `system_version` = '$VERSION'";
-	$notice = Notice($systemURL);
-	$query .= ", `system_notice` = '$notice'";
+	$query .= ", `system_email` = '$system_email'";
+	$query .= ", `system_notice` = '$sysNotice'";
 	$query .= ", `system_url` = '$systemURL'";
 	$query .= " ON DUPLICATE KEY";
 	$query .= " UPDATE `system_version` = '$VERSION'";
-	if ($DEBUG) echo "<br />QRY: $query<br />";
 	mysqli_query($dbcon, $query);
-	if ($DEBUG) echo "RES: " . mysqli_error($dbcon) . "<br />";
 }
 
 //----------------------------------------------------------------------------
-function Notice($systemURL) {
+function Notice() {
 //----------------------------------------------------------------------------
-	$notice = "AARP reservations are now closed for this year.\n";
-	$notice .= "<br />";
-	$notice .= "Please come back when we re-open next January.\n";
-	return ($notice);
+	$sysNotice = (isset($_SESSION["SystemNotice"])) ? $_SESSION["SystemNotice"] : "" ;
+
+	if ($sysNotice = "") {
+		$sysNotice = "AARP reservations are now closed for this year.\n";
+		$sysNotice .= "<br />";
+		$sysNotice .= "Please come back when we re-open next January.\n";
+	}
+	return;
 }
 
 //----------------------------------------------------------------------------
 function Create_Opendb_File($host, $dbuserid, $dbpassword, $dbname) {
 //----------------------------------------------------------------------------
-	global $opendb_filename;
 	global $dbtimezone;
 	global $VERSION;
 	global $DEBUG;
 	$ds = "$";
 
 	// Open the file for writing
-	if ($DEBUG) echo "Creating $opendb_filename<br />";
-	$fileptr = fopen($opendb_filename, "w");
+	$fileptr = fopen("opendb.php", "w");
 	fwrite($fileptr, "<?php\n");
 	fwrite($fileptr, "//Variables for connecting to your database.\n");
 	fwrite($fileptr, "//These variable values come from your database naming\n");
@@ -263,8 +287,8 @@ function Create_Opendb_File($host, $dbuserid, $dbpassword, $dbname) {
 	fwrite($fileptr, "if (mysqli_connect_errno(" . $ds . "dbcon)) DIE (\"Unable to connect to database! (\" . mysqli_connect_error() . \")\");\n");
 	fwrite($fileptr, "mysqli_select_db(" . $ds . "dbcon, " . $ds . "dbname);\n\n");
 	fwrite($fileptr, "date_default_timezone_set('" . $dbtimezone . "');\n\n");
-	fwrite($fileptr, "require \"session.php\";\n");
-	fwrite($fileptr, "?>\n");
+	// fwrite($fileptr, "require_once \"session.php\";\n"); // removed in version 5.00
+	fwrite($fileptr, "?>");
 	fclose($fileptr);
 }
 
@@ -279,10 +303,8 @@ function Add_Admin($admin_sitename, $admin_first, $admin_last, $admin_email, $ad
 	global $DEBUG;
 	global $dbcon;
 
-	if ($DEBUG) echo "INPUT: $admin_sitename, $admin_first, $admin_last, $admin_email, $admin_phone<br />";
-
-	$query = "INSERT INTO $SITE_TABLE";
-	$query .= " SET `site_index` = 1";
+	$query = "INSERT INTO $SITE_TABLE SET";
+	$query .= "  `site_index` = 1";
 	$query .= ", `site_name` = 'Unassigned'";
 	$query .= ", `site_address` = '||||||'";
 	$query .= ", `site_inet` = ''";
@@ -291,15 +313,13 @@ function Add_Admin($admin_sitename, $admin_first, $admin_last, $admin_email, $ad
 	$query .= ", `site_addedby` = 0";
 	$query .= ", `site_open` = '0000-00-00'";
 	$query .= ", `site_closed` = '0000-00-00'";
-	$query .= ", `site_schedule` = ''";
 	$query .= ", `site_help` = ''";
 	$query .= ", `site_sumres` = ''";
-	if ($DEBUG) echo "<br />QRY: $query<br />";
+	$query .= ", `site_10dig` = ''";
 	mysqli_query($dbcon, $query);
-	if ($DEBUG) echo "RES: " . mysqli_error($dbcon) . "<br />";
 
-	$query = "INSERT INTO $SITE_TABLE";
-	$query .= " SET `site_index` = 2";
+	$query = "INSERT INTO $SITE_TABLE SET";
+	$query .= "  `site_index` = 2";
 	$query .= ", `site_name` = '$admin_sitename'";
 	$query .= ", `site_address` = '||||||'";
 	$query .= ", `site_inet` = ''";
@@ -308,15 +328,13 @@ function Add_Admin($admin_sitename, $admin_first, $admin_last, $admin_email, $ad
 	$query .= ", `site_addedby` = 0";
 	$query .= ", `site_open` = '0000-00-00'";
 	$query .= ", `site_closed` = '0000-00-00'";
-	$query .= ", `site_schedule` = ''";
 	$query .= ", `site_help` = ''";
 	$query .= ", `site_sumres` = ''";
-	if ($DEBUG) echo "<br />QRY: $query<br />";
+	$query .= ", `site_10dig` = ''";
 	mysqli_query($dbcon, $query);
-	if ($DEBUG) echo "RES: " . mysqli_error($dbcon) . "<br />";
 
-	$query = "INSERT INTO $USER_TABLE";
-	$query .= " SET `user_index` = 1";
+	$query = "INSERT INTO $USER_TABLE SET";
+	$query .= "  `user_index` = 1";
 	$query .= ", `user_name` = '$admin_name'";
 	$query .= ", `user_email` = '$admin_email'";
 	$query .= ", `user_phone` = '$admin_phone'";
@@ -327,9 +345,7 @@ function Add_Admin($admin_sitename, $admin_first, $admin_last, $admin_email, $ad
 	$query .= ", `user_appt_site` = 0";
 	$query .= ", `user_options` = 'A'";
 	$query .= ", `user_sitelist` = 0";
-	if ($DEBUG) echo "<br />QRY: $query<br />";
 	mysqli_query($dbcon, $query);
-	if ($DEBUG) echo "RES: " . mysqli_error($dbcon) . "<br />";
 }
 
 ?>
@@ -437,7 +453,7 @@ function Check_Inputs() {
 <li><b>Create a database</b>
 	<br />This is done using the hosting site&apos;s tools and may differ depending on the host. All you need to set up is the database. This process will create the tables that the database uses. The host may be called &quot;localhost&quot; or may be an IP address.</li>
 <li><b>Create a database user id and password</b>
-	<br />This is done using the hosting site&apos;s tools and may differ depending on the host. This is used for the software to gain access to the database. The user must have full access permissions to the database. You and your schedulers will have their own login credentials to access the software.</li>
+	<br />This is done using the hosting site&apos;s tools and may differ depending on the host. The user name and password is used by the software to gain access to the database and is not related to you as the software user. This user must have full access permissions to the database. You and your schedulers will have their own login credentials to access the software.</li>
 <li><b>Provide the information about you as primary administrator</b>
 	<br />You must have at least one administrator. Site names should always begin with the city. If you aren&apos;t associated with a site, you can use a dummy name, like &quot;District&quot; or &quot;State&quot;. Your initial password will be &quot;admin&quot;.</li>
 </ol>
@@ -529,4 +545,3 @@ if ($initialize == "fail") {
 </div> <!-- Main -->
 </body>
 </html>
-
