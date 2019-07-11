@@ -1,7 +1,13 @@
 <?php
-//File version 5.00
 //ini_set('display_errors', '1');
-//
+
+// ---------------------------- VERSION HISTORY -------------------------------
+//File Version 5.01
+//	Added "@" to suppress some error messages when db is empty
+//	Adding or deleting a single slot was jumping to a different day
+//File Version 5.00
+
+
 // Set up environment
 require "environment.php";
 
@@ -198,7 +204,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 			Add_Wait_Slots($FormApptSlotSets);
 			break;
 		case "PrintExcel":
-			//header('Location: excelexport.php');
 			include "excelexport.php";
 			break;
 		case "InitialLogin":
@@ -704,7 +709,7 @@ function Calc_Slots() {
 	$query = "SELECT * FROM $APPT_TABLE";
 	$query .= " ORDER BY `appt_date`, `appt_time`, `appt_location`, `appt_wait`";
 	$appointments = mysqli_query($dbcon, $query);
-	while ($row = mysqli_fetch_array($appointments)) {
+	while ($row = @mysqli_fetch_array($appointments)) {
 		$Appt = $row["appt_no"];
 		$Date = $row["appt_date"];
 		$Time = $row["appt_time"];
@@ -1280,7 +1285,7 @@ function Show_Slots() {
 		$SaveAppt = 0; // Stores the appt number of the last empty callback list appt
 		$SaveWaitSequence = 0;
 		$OldLoc = 0;
-		while($row = mysqli_fetch_array($appointments)) {
+		while($row = @mysqli_fetch_array($appointments)) {
 			$Name = htmlspecialchars_decode($row["appt_name"]);
 			$Phone = $row["appt_phone"];
 			$Tags = htmlspecialchars_decode($row["appt_tags"]);
@@ -1376,7 +1381,7 @@ function Show_Slots() {
 		$ApptGroupList = array();
 		$ApptGroupListIndex = 0;
 		$SaveWaitSequence = 0;
-		while($row = mysqli_fetch_array($appointments)) {
+		while($row = @mysqli_fetch_array($appointments)) {
 			$Type = $row["appt_type"];
 			$Date = $row["appt_date"];
 			$Time = $row["appt_time"];
@@ -1681,7 +1686,7 @@ function Show_Slots() {
 			<span class='apptKey apptFull'><center>Full</center></span></td></tr>\n";
 		}
 
-		while ($row = mysqli_fetch_array($appointments)) {
+		while ($row = @mysqli_fetch_array($appointments)) {
 			$Date = $row["appt_date"];
 			$Time = $row["appt_time"];
 			$Location = $row["appt_location"];
@@ -2571,7 +2576,7 @@ function Configure_Slots() {
 	$FormApptSlotSets = "";
 
 	// If only one add/remove on one day, go back to that day
-	if ((($FormApptNo == "SlotAdd") OR ($FormApptNo == "SlotRemove"))
+	if ((($FormApptNo == "SlotAdd1") OR ($FormApptNo == "SlotRemove1"))
 	   AND (count($SlotSets) == 4)
 	   AND ($SlotCount == 1)) {
 		$ApptView = "ViewDaily";
@@ -3636,7 +3641,7 @@ function InsertNewAppt($iName, $iPhone, $iEmail, $iTags, $iNeed, $iInfo, $iStatu
 		if (LocationToAdd.value == 0) { alert("Select a site for the new time group."); return; }
 
 		// Select "Add"
-		SlotAction.value = "SlotAdd";
+		SlotAction.value = "SlotAdd1";
 
 		// set the location
 		SlotLocation.value = LocationToAdd.value;

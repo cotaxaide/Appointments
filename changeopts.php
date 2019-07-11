@@ -1,7 +1,10 @@
 <?php
-// Version 5.00
 //ini_set('display_errors', '1');
 // This is an AJAX file used to update user options
+
+// ---------------------------- VERSION HISTORY -------------------------------
+//File Version 5.01
+//	Change to administrator error message that appeared when at user home site
 
 // Set up environment
 require "environment.php";
@@ -28,12 +31,14 @@ if ($usite == $SiteCurrent) { // goes in user table
 	$result = mysqli_query($dbcon, $query);
 	//echo "UPDATE: ($result)\n"; // DEBUG
 }
+else {
 
 	// check for admin
 	if ($useroptions == "A") {
 		echo "Go to user's home site to make them an Administrator";
 		return;
 	}
+}
 
 // delete any entry already there
 $query = "DELETE FROM $ACCESS_TABLE";

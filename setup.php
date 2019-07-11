@@ -1,14 +1,14 @@
 <?php
-$VERSION = "5.00";
-
-// This routine is the first to run when a new installation is encountered.
-// It is run by the index.php routine when the opendb.php file is not present.
 // This routine:
-// 1. creates the opendb.php file so that other php routines have access to the database
-//    by including it first in the respective routine.
-// 2. makes sure that the database has the correct current set of tables and table columns
-// 3. after the above, opens the sitemanage.php routine so that the Administrator
-//    can further set up their sites and schedulers.
+// - makes sure that the database has the correct current set of tables and table columns
+// - creates the opendb.php file so that all php routines have access to the database
+
+//--------------------------------- VERSION HISTORY -----------------------------------
+$VERSION = "5.01a";
+//	Notice() was not returning the default notice
+//	Defaulting text columns to "" caused errors with some mySql installations
+//	System mail and url columns not properly populated on update
+//$VERSION = "5.00";
 
 //--------------------------------- GLOBAL VARIABLES -----------------------------------
 $initialize = "none";
@@ -45,14 +45,18 @@ if (file_exists("opendb.php")) {
 	$query = "SELECT * FROM $SYSTEM_TABLE";
 	$result = mysqli_query($dbcon, $query);
 	$row = mysqli_fetch_array($result); // only one row
+
+	// populate SESSION variables
 	$_SESSION["SystemVersion"] = $row['system_version'];
 	$_SESSION["SystemGreeting"] = $row['system_greeting'];
-	$_SESSION["SystemNotice"] = $row['system_notice'];
+	$_SESSION["SystemNotice"] = $sysNotice = $row['system_notice'];
 	$_SESSION["SystemInfo"] = $row['system_info'];
-	$_SESSION["SystemURL"] = $row['system_url'];
+	$_SESSION["SystemURL"] = $systemURL = $row['system_url'];
 	$_SESSION["TRACE"] = $row['system_trace'];
 	// New in version 5.00
-	$_SESSION["SystemEmail"] = $system_email = (isset($row['system_email'])) ? $row['system_email'] : "" ;
+	$system_email = (isset($row['system_email'])) ? $row['system_email'] : "" ;
+	if ($system_email == "") $system_email = "no_reply@tax_aide_reservations.no_email";
+	$_SESSION["SystemEmail"] = $system_email;
 	$_SESSION["SystemReminders"] = (isset($row['system_reminders'])) ? $row['system_reminders'] : "" ;
 	if ($_SESSION["SystemVersion"] != $VERSION) {
 		Configure_Database();
@@ -120,76 +124,76 @@ function Configure_Database() {
 // error_log("SETUP DEBUG: Making the database");
 
 global $SYSTEM_TABLE;
-Configure_Table($SYSTEM_TABLE, "system_index", "INT AUTO_INCREMENT PRIMARY KEY NOT NULL");
-Configure_Column($SYSTEM_TABLE, "system_version", "VARCHAR(50) DEFAULT ''");
-Configure_Column($SYSTEM_TABLE, "system_greeting", "TEXT DEFAULT ''");
-Configure_Column($SYSTEM_TABLE, "system_notice", "TEXT DEFAULT ''");
-Configure_Column($SYSTEM_TABLE, "system_info", "TEXT DEFAULT ''");
-Configure_Column($SYSTEM_TABLE, "system_url", "TEXT DEFAULT ''");
-Configure_Column($SYSTEM_TABLE, "system_email", "TEXT DEFAULT ''");
-Configure_Column($SYSTEM_TABLE, "system_reminders", "TEXT DEFAULT ''");
-Configure_Column($SYSTEM_TABLE, "system_trace", "VARCHAR(1) DEFAULT ''");
+Configure_Table($SYSTEM_TABLE, "system_index", "INT AUTO_INCREMENT PRIMARY KEY");
+Configure_Column($SYSTEM_TABLE, "system_version", "VARCHAR(50)");
+Configure_Column($SYSTEM_TABLE, "system_greeting", "TEXT");
+Configure_Column($SYSTEM_TABLE, "system_notice", "TEXT");
+Configure_Column($SYSTEM_TABLE, "system_info", "TEXT");
+Configure_Column($SYSTEM_TABLE, "system_url", "TEXT");
+Configure_Column($SYSTEM_TABLE, "system_email", "TEXT");
+Configure_Column($SYSTEM_TABLE, "system_reminders", "TEXT");
+Configure_Column($SYSTEM_TABLE, "system_trace", "VARCHAR(1)");
 
 global $ACCESS_TABLE;
-Configure_Table($ACCESS_TABLE, "acc_index", "BIGINT AUTO_INCREMENT PRIMARY KEY NOT NULL");
+Configure_Table($ACCESS_TABLE, "acc_index", "BIGINT AUTO_INCREMENT PRIMARY KEY");
 Configure_Column($ACCESS_TABLE, "acc_location", "BIGINT UNSIGNED");
 Configure_Column($ACCESS_TABLE, "acc_user", "BIGINT UNSIGNED");
 Configure_Column($ACCESS_TABLE, "acc_owner", "BIGINT UNSIGNED");
-Configure_Column($ACCESS_TABLE, "acc_option", "TINYTEXT DEFAULT ''");
+Configure_Column($ACCESS_TABLE, "acc_option", "TINYTEXT");
 
 global $USER_TABLE;
-Configure_Table($USER_TABLE, "user_index", "BIGINT AUTO_INCREMENT PRIMARY KEY NOT NULL");
-Configure_Column($USER_TABLE, "user_name", "VARCHAR(50) DEFAULT ''");
-Configure_Column($USER_TABLE, "user_email", "VARCHAR(256) DEFAULT ''");
-Configure_Column($USER_TABLE, "user_phone", "VARCHAR(25) DEFAULT ''");
-Configure_Column($USER_TABLE, "user_pass", "VARCHAR(100) DEFAULT ''");
-Configure_Column($USER_TABLE, "user_last", "VARCHAR(50) DEFAULT ''");
-Configure_Column($USER_TABLE, "user_first", "VARCHAR(50) DEFAULT ''");
+Configure_Table($USER_TABLE, "user_index", "BIGINT AUTO_INCREMENT PRIMARY KEY");
+Configure_Column($USER_TABLE, "user_name", "VARCHAR(50)");
+Configure_Column($USER_TABLE, "user_email", "VARCHAR(256)");
+Configure_Column($USER_TABLE, "user_phone", "VARCHAR(25)");
+Configure_Column($USER_TABLE, "user_pass", "VARCHAR(100)");
+Configure_Column($USER_TABLE, "user_last", "VARCHAR(50)");
+Configure_Column($USER_TABLE, "user_first", "VARCHAR(50)");
 Configure_Column($USER_TABLE, "user_home", "BIGINT");
 Configure_Column($USER_TABLE, "user_appt_site", "BIGINT");
-Configure_Column($USER_TABLE, "user_options", "TEXT DEFAULT ''");
-Configure_Column($USER_TABLE, "user_sitelist", "TEXT DEFAULT ''");
+Configure_Column($USER_TABLE, "user_options", "TEXT");
+Configure_Column($USER_TABLE, "user_sitelist", "TEXT");
 Configure_Column($USER_TABLE, "user_lastlogin", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP");
 
 global $SITE_TABLE;
-Configure_Table($SITE_TABLE, "site_index", "BIGINT AUTO_INCREMENT PRIMARY KEY NOT NULL");
-Configure_Column($SITE_TABLE, "site_name", "TEXT DEFAULT ''");
-Configure_Column($SITE_TABLE, "site_address", "TEXT DEFAULT ''");
-Configure_Column($SITE_TABLE, "site_inet", "TEXT DEFAULT ''");
-Configure_Column($SITE_TABLE, "site_contact", "TEXT DEFAULT ''");
-Configure_Column($SITE_TABLE, "site_message", "TEXT DEFAULT ''");
+Configure_Table($SITE_TABLE, "site_index", "BIGINT AUTO_INCREMENT PRIMARY KEY");
+Configure_Column($SITE_TABLE, "site_name", "TEXT");
+Configure_Column($SITE_TABLE, "site_address", "TEXT");
+Configure_Column($SITE_TABLE, "site_inet", "TEXT");
+Configure_Column($SITE_TABLE, "site_contact", "TEXT");
+Configure_Column($SITE_TABLE, "site_message", "TEXT");
 Configure_Column($SITE_TABLE, "site_addedby", "BIGINT");
 Configure_Column($SITE_TABLE, "site_open", "DATE");
 Configure_Column($SITE_TABLE, "site_closed", "DATE");
-Configure_Column($SITE_TABLE, "site_reminder", "TEXT DEFAULT ''");
-Configure_Column($SITE_TABLE, "site_lastrem", "TEXT DEFAULT ''");
-Configure_Column($SITE_TABLE, "site_help", "TEXT DEFAULT ''");
-Configure_Column($SITE_TABLE, "site_sumres", "TEXT DEFAULT ''");
-Configure_Column($SITE_TABLE, "site_10dig", "TEXT DEFAULT ''");
+Configure_Column($SITE_TABLE, "site_reminder", "TEXT");
+Configure_Column($SITE_TABLE, "site_lastrem", "TEXT");
+Configure_Column($SITE_TABLE, "site_help", "TEXT");
+Configure_Column($SITE_TABLE, "site_sumres", "TEXT");
+Configure_Column($SITE_TABLE, "site_10dig", "TEXT");
 
 global $APPT_TABLE;
-Configure_Table($APPT_TABLE, "appt_no", "BIGINT AUTO_INCREMENT PRIMARY KEY NOT NULL");
-Configure_Column($APPT_TABLE, "appt_date", "DATE DEFAULT '0000-00-00' NOT NULL");
+Configure_Table($APPT_TABLE, "appt_no", "BIGINT AUTO_INCREMENT PRIMARY KEY");
+Configure_Column($APPT_TABLE, "appt_date", "DATE");
 Configure_Column($APPT_TABLE, "appt_time", "TIME");
-Configure_Column($APPT_TABLE, "appt_name", "TEXT DEFAULT ''");
+Configure_Column($APPT_TABLE, "appt_name", "TEXT");
 Configure_Column($APPT_TABLE, "appt_location", "BIGINT");
 Configure_Column($APPT_TABLE, "appt_email", "VARCHAR(256)");
 Configure_Column($APPT_TABLE, "appt_emailsent", "DATE");
 Configure_Column($APPT_TABLE, "appt_phone", "VARCHAR(50)");
-Configure_Column($APPT_TABLE, "appt_tags", "TEXT DEFAULT ''");
-Configure_Column($APPT_TABLE, "appt_need", "TEXT DEFAULT ''");
-Configure_Column($APPT_TABLE, "appt_info", "TEXT DEFAULT ''");
-Configure_Column($APPT_TABLE, "appt_status", "TEXT DEFAULT ''");
+Configure_Column($APPT_TABLE, "appt_tags", "TEXT");
+Configure_Column($APPT_TABLE, "appt_need", "TEXT");
+Configure_Column($APPT_TABLE, "appt_info", "TEXT");
+Configure_Column($APPT_TABLE, "appt_status", "TEXT");
 Configure_Column($APPT_TABLE, "appt_wait", "BIGINT");
 Configure_Column($APPT_TABLE, "appt_change", "DATETIME");
-Configure_Column($APPT_TABLE, "appt_by", "TEXT DEFAULT ''");
+Configure_Column($APPT_TABLE, "appt_by", "TEXT");
 Configure_Column($APPT_TABLE, "appt_type", "VARCHAR(1)");
 
 global $SCHED_TABLE;
-Configure_Table($SCHED_TABLE, "sched_index", "INT AUTO_INCREMENT PRIMARY KEY NOT NULL");
+Configure_Table($SCHED_TABLE, "sched_index", "INT AUTO_INCREMENT PRIMARY KEY");
 Configure_Column($SCHED_TABLE, "sched_location", "BIGINT");
-Configure_Column($SCHED_TABLE, "sched_name", "TEXT DEFAULT ''");
-Configure_Column($SCHED_TABLE, "sched_pattern", "TEXT DEFAULT ''");
+Configure_Column($SCHED_TABLE, "sched_name", "TEXT");
+Configure_Column($SCHED_TABLE, "sched_pattern", "TEXT");
 Update_Version();
 }
 
@@ -234,7 +238,6 @@ function Update_Version() {
 	global $systemURL;
 	global $dbcon;
 	global $system_email;
-	if ($system_email == "") $system_email = "no_reply@tax_aide_reservations.no_email";
 	$sysNotice = Notice();
 
 	$query = "INSERT INTO $SYSTEM_TABLE";
@@ -258,7 +261,7 @@ function Notice() {
 		$sysNotice .= "<br />";
 		$sysNotice .= "Please come back when we re-open next January.\n";
 	}
-	return;
+	return $sysNotice;
 }
 
 //----------------------------------------------------------------------------

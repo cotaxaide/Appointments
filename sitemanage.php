@@ -1,6 +1,11 @@
 <?php
-// Version 5.00
 // ini_set('display_errors', '1');
+
+// ---------------------------- VERSION HISTORY -------------------------------
+//File Version 5.01
+//	Error message to change to administrator wrongly appears
+//	Added setting system greeting if not already set
+//File Version 5.00
 
 // Set up environment
 require "environment.php";
