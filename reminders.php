@@ -1,5 +1,5 @@
 <?PHP
-//Version 5.00
+//Version 5.01
 //ini_set('display_errors', '1');
 
 // Set up environment
@@ -46,6 +46,7 @@ while($row = mysqli_fetch_array($appointments)) {
 	if ($apptEmail == "") continue; // no email to send to
 	$apptDate = $row["appt_date"];
 	if ($apptDate == $NullDate) continue; // on callback or deleted list
+	if ($apptDate < $TodayDate) continue; // skip if earlier than today
 	$apptDate = strtotime($apptDate);
 	$siteIndex = "S" . $row["appt_location"];
 	$graceDate = strtotime("-" . $siteLastRem[$siteIndex] . " days");

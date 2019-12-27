@@ -2,10 +2,15 @@
 // ini_set('display_errors', '1');
 
 // ---------------------------- VERSION HISTORY -------------------------------
-//File Version 5.01
+// File Version 5.02
+// 	Added a link to view the trace file
+// File Version 5.01b
+//	Added indication that a cron job has not yet run
+//	Prevent changing sites after a search
+// File Version 5.01a
 //	Error message to change to administrator wrongly appears
 //	Added setting system greeting if not already set
-//File Version 5.00
+// File Version 5.00
 
 // Set up environment
 require "environment.php";
@@ -148,6 +153,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 		case "FindByName":
 		case "FindBySound":
 			Do_Search();
+			$SiteUserHome = $SiteCurrent;
 			break;
 
 		case "AddSite": 
@@ -454,6 +460,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 			$query .= " WHERE `system_index` = 1";
 			mysqli_query($dbcon, $query);
 			$_SESSION["TRACE"] = false;
+			break;
+
+		case "ViewTrace":
+			header('Location: viewtrace.php');
 			break;
 
 		case "SignOut":
@@ -856,6 +866,7 @@ function List_Sites($selections) {
 	global $ACCESS_ALL, $VIEW_APP;
 	global $checkboxYes;
 	global $Errormessage;
+	global $SiteCurrent;
 
 	$foundone = false;
 
@@ -869,7 +880,7 @@ function List_Sites($selections) {
 				case "mine":
 					if (in_array($LocationIndex[$j],$MyManagedSites) or $isAdministrator) $mine = true;
 					$id = "id='AS" . $LocationIndex[$j] . "' "; 
-					if ($LocationIndex[$j] == $SiteUserHome) $select_this = "selected ";
+					if ($LocationIndex[$j] == $SiteCurrent) $select_this = "selected ";
 					break;
 				case "options":
 					if ($LocationIndex[$j] == $SiteUserHome) continue 2; // jump to next $j
@@ -2676,6 +2687,7 @@ function Show_Search() {
 
 			case "StartTrace":
 			case "StopTrace":
+			case "ViewTrace":
 				break;
 
 			default:
@@ -2793,6 +2805,7 @@ function Test_For_Enter(id, e) {
 				else {
 					echo "\t\t<div class='menuButtonListItem' id='turn_trace_on' onclick='Action_Request(\"StartTrace\");'>Turn trace on</div>\n";
 				}
+				echo "\t\t<div class='menuButtonListItem' id='show_trace' onclick='Action_Request(\"ViewTrace\");'>View trace</div>\n";
 				echo "\t\t<div class='menuButtonListItem' id='php_info' onclick='window.open(\"show_phpinfo.php\");'>View PHP settings</div>\n";
 			echo "\t</div>\n";
 		echo "</div>\n";
@@ -2871,8 +2884,11 @@ function Test_For_Enter(id, e) {
 						onchange="Change_System_Data()" />
 					</td></tr>
 
-				<tr>	<td>Reminder cron job:</td><td></td>
-					<td><?php if ($_SESSION['SystemReminders']) echo "Last ran on " . $_SESSION['SystemReminders'] . "."; ?>
+				<tr>	<td>Periodic email reminder:</td><td></td>
+					<td><?php
+						if ($_SESSION['SystemReminders']) echo "Last ran on " . $_SESSION['SystemReminders'] . "."; 
+						else echo "(No timed reminder task has run.)"
+					?>
 					</td></tr>
 			</table>
 		</div>
@@ -2891,7 +2907,7 @@ function Test_For_Enter(id, e) {
 			<ul>
 				<li> Use &lt;b&gt;some text&lt;/b&gt; to make <b>some text</b> bold.</li>
 				<li> Use &lt;i&gt;some text&lt;/i&gt; to make <i>some text</i> italic.</li>
-				<li> Use &lt;u&gt;some text&lt;/u&gt; to make <u>some text</u> italic.</li>
+				<li> Use &lt;u&gt;some text&lt;/u&gt; to make <u>some text</u> underlined.</li>
 				<li> Nest them: &lt;u&gt;&lt;b&gt;&lt;i&gt;some text&lt;/i&gt;&lt;/b&gt;&lt;u&gt; to make <u><b><i>some text</i></b></u> do combinations.</li>
 				<li> Use &lt;br /&gt; to start a new line. (Leaving blank lines won&apos;t do it.) Use 2 of them to skip a line.</li>
 				<li> Use &amp;apos; for an apostrophe (&apos;) - if you don&apos;t, we&apos;ll fix it.</li>

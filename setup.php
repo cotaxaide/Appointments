@@ -4,7 +4,13 @@
 // - creates the opendb.php file so that all php routines have access to the database
 
 //--------------------------------- VERSION HISTORY -----------------------------------
-$VERSION = "5.01a";
+$VERSION = "5.02";
+//	Updated appointment.php, sitemanage.php, added viewtrace.php
+//$VERSION = "5.01c";
+//	Updated appointment.php, environment.php
+//$VERSION = "5.01b";
+//	Updated index,php, appointment.php, sitemanage.php
+//$VERSION = "5.01a";
 //	Notice() was not returning the default notice
 //	Defaulting text columns to "" caused errors with some mySql installations
 //	System mail and url columns not properly populated on update
