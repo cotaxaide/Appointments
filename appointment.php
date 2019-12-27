@@ -2,7 +2,22 @@
 //ini_set('display_errors', '1');
 
 // ---------------------------- VERSION HISTORY -------------------------------
-//File Version 5.01
+//File Version 5.02
+//	Fixed undefined variable when viewing Callback list
+//	Sites not visible in UserView due to calendar space at 50%
+//	Time of an appointment not displaying correctly in UserView
+//File Version 5.01c
+//	Added the ability to remove appointment records between 2 dates
+//File Version 5.01b
+//	When adding new time group, change default site to first listed or home site
+//	When adding new time group, keep daily view at the same date
+//	When adding new time group, allow to add more than 1 slot
+//	Keep daily view date visible after a search
+//	When daily view date selected, scroll calendar to view that date
+//	Removed old MonthUp and MonthDown remnants from prior calendar operation
+//	Corrected problem: print excel in Summary View. Switch to Daily View prints excel and hangs
+//	Added print function to auto-print the ERO report
+//File Version 5.01a
 //	Added "@" to suppress some error messages when db is empty
 //	Adding or deleting a single slot was jumping to a different day
 //File Version 5.00
@@ -42,7 +57,6 @@ $LocationContact[0] = "";
 $LocationMessage[0] = "";
 $ShowDagger = false;
 $ShowSlotBox = false;
-$ApptTest = "";
 $ApptBox = "hidden";
 $MoveBox = "hidden";
 $ApptNo = "";
@@ -173,22 +187,13 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 			$ApptMove = $FormApptOldNo;
 			$ApptBox = "visible";
 			break;
-		case "MonthUp":
-			$mo = $_SESSION["CalStartMo"];
-			if ($mo == 1) $_SESSION["CalStartYr"]--;
-			$_SESSION["CalStartMo"] = ($mo == 1) ? 12 : $mo - 1;
-			break;
-		case "MonthDown":
-			$mo = $_SESSION["CalStartMo"];
-			if ($mo == 12) $_SESSION["CalStartYr"]++;
-			$_SESSION["CalStartMo"] = ($mo == 12) ? 1 : $mo + 1;
-			break;
 		case "FindByTags":
 		case "FindByPhone":
 		case "FindByEmail":
 		case "FindByName":
 		case "FindBySound":
 			Do_Search();
+			$FirstSlotDate = $Date = $FormApptDate;
 			break;
 		case "SlotAdd":
 		case "SlotAdd1":
@@ -198,14 +203,19 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 		case "SlotRemove1":
 		case "SlotRemoveAll":
 		case "SlotRemoveDel":
+		case "SlotRemoveDateRange":
 			Configure_Slots();
+			$FirstSlotDate = $Date = $FormApptDate;
 			break;
 		case "AddCBSlots":
 			Add_Wait_Slots($FormApptSlotSets);
 			break;
 		case "PrintExcel":
+			if ($_SESSION["TRACE"]) {
+				error_log("APPT: " . $UserName . ", view=" . $ApptView . ", action=" . $FormApptNo);
+			}
 			include "excelexport.php";
-			break;
+			exit;
 		case "InitialLogin":
 			break;
 		default: // The appointment number in the database
@@ -630,8 +640,7 @@ function Calc_Slots() {
 	global $siteHeight, $siteMaxHeight;
 	global $UserName;
 	global $Name, $Date, $Appt, $Phone, $Email;
-	global $Date, $TodayDate, $NullDate;
-	global $CustEList, $CustPList;
+	global $Date, $Time, $TodayDate, $NullDate;
 	global $Appt, $Name, $Type;
 	global $LocationIndex;
 
@@ -678,15 +687,17 @@ function Calc_Slots() {
 	$siteHeight = $siteMaxHeight = "";
 	if ($ApptView == "ViewUser") {
 		$siteHeight = "100%";
-		$siteMaxHeight = "100%;";
+		$siteMaxHeight = "100%";
 		$calHidden = "visibility: hidden;";
 		$siteTop = "top: 0;";
+		$calMinHeight = "min-height: 0%"; // override default
 	}
 	else {
 		$siteHeight = ($LocationList[0] * 1.5) . "em";
 		$siteMaxHeight = "50%";
 		$calHidden = "visibility: visible;";
 		$siteTop = "top: 3em;";
+		$calMinHeight = "";
 	}
 	echo "<div id='subSidebar' style='$siteTop'>\n";
 	echo "<div id='viewSites' style='height:$siteHeight; max-height:$siteMaxHeight;'>\n";
@@ -694,7 +705,7 @@ function Calc_Slots() {
 	echo "</div>";
 
 	// Initialize the calendar
-	echo "<div id='viewCal' style='max-height: calc(100% - $siteHeight); $calHidden'>\n";
+	echo "<div id='viewCal' style='max-height: calc(100% - $siteHeight); $calHidden $calMinHeight'>\n";
 	echo "<div id='CalBoxDiv'>\n";
 	if (@$_SESSION["CalStartMo"] == 0) {
 		$DPART = explode("-", $TodayDate);
@@ -938,7 +949,7 @@ function Location_Checkboxes() {
 			$SiteFlag = "";
 			$disabled = "";
 			if ((($ApptView != "ViewUser") OR $LocationIsOpen[$j]) AND ($LocationList[0] == 1)) {
-			       	$LocationShow[1] = 1; // if only one, show it
+			      	$LocationShow[1] = 1; // if only one, show it
 			}
 			if ($LocationShow[$j] == 1) {
 				$checked = "checked='checked'";
@@ -1342,6 +1353,7 @@ function Show_Slots() {
 		//Start the table
 		echo "<div class='slotdate'>\n";
 		echo "<table id='date_table' class='apptTable'>\n";
+		$HomeIndex = $LocationLookup["S" . $UserHome];
 		if ($ApptView == "ViewCallback") {
 			$FirstSlotDate = $NullDate;
 			$HeaderText = "Callback List:";
@@ -1349,6 +1361,7 @@ function Show_Slots() {
 		else {
 			$ShowDate = Format_Date($FirstSlotDate, true); // set $MON which is global
 			$HeaderText = "Appointments for $ShowDate:";
+			$AddSlotLoc = "";
 			if ($FirstSlotDate == $NullDate) {
 				$HeaderText = "No appointments found";
 				echo "<tr class='apptGroup'><td colspan='7'>$HeaderText</td></tr>\n";
@@ -1475,6 +1488,7 @@ function Show_Slots() {
 							$TimeHeader .= " <div class=\"Do1Slot\"";
 							$TimeHeader .= " onclick=\"Do1Slot('rmv', '$Lno', '$FirstSlotDate', '$Stime');\"";
 							$TimeHeader .= " title=\"Remove an unused appointment slot for " . $ShowTime . ".\">-</div>";
+							if (($AddSlotLoc == "") OR ($Lno == $LocationList[$HomeIndex])) $AddSlotLoc = $Lno;
 						}
 					}
 					echo "<tr class='apptLoc bold'><td colspan='2'>$TimeHeader</td>\n";
@@ -1565,7 +1579,6 @@ function Show_Slots() {
 		echo "</table>\n";
 
 		// Add the new slot options for the callback list
-		$HomeIndex = $LocationLookup["S" . $UserHome];
 		if (($ApptView == "ViewCallback") AND ($LocationShow[$HomeIndex]) AND ($UserPermissions & $ADD_CB)) {
 			echo "<br /><br />\n";
 			echo "<button onclick='AddCBSlots()'>Click to add...</button>\n";
@@ -1575,13 +1588,15 @@ function Show_Slots() {
 		// Add the new time group options to the daily view
 		if (($ApptView == "ViewDaily") AND ($UserPermissions & ($ADMINISTRATOR | $MANAGER))) {
 			echo "<br /><br />\n";
-			$Hloc = $LocationList[$HomeIndex];
-			echo "<button onclick='AddNewTime(\"$FirstSlotDate\")'>Click to add...</button>a new time group at \n";
-			echo "<input id='TimeToAdd' type='time' /> for the \n";
+			if ($AddSlotLoc == "") $AddSlotLoc = $LocationList[$HomeIndex];
+			echo "Add a new time group at\n";
+			echo "<input id='TimeToAdd' type='time' /> with\n";
+			echo "<input id='NewSlotsToAdd' type='number' size='1' maxlength='2' value='1'> slot(s) to the\n";
 			echo "<select id=\"LocationToAdd\">\n";
 			echo "<option value=\"0\">Choose a site</option>\n";
-			List_Locations($Hloc);
+			List_Locations($AddSlotLoc);
 			echo "</select>\n";
+			echo "<button onclick='AddNewTime(\"$FirstSlotDate\")'>(Click to add)</button>\n";
 		}
 		echo "</div>\n";
 
@@ -2481,6 +2496,16 @@ function Configure_Slots() {
 	$DateRange = explode(",", $FormApptSlotDates);
 	$StartDate = $ThisDate = trim($DateRange[0]);
 	$StopDate = trim($DateRange[1]);
+
+	if ($FormApptNo == "SlotRemoveDateRange") {
+		$query = "DELETE FROM $APPT_TABLE";
+		$query .= " WHERE `appt_location` = +$FormApptSlotLoc";
+		$query .= " AND `appt_date` >= '$StartDate'";
+		$query .= " AND `appt_date` <= '$StopDate'";
+		mysqli_query($dbcon, $query);
+		return;
+	}
+
 	$SlotSets = explode(",", $FormApptSlotSets);
 
 	if ($FormApptNo == "SlotClone") {
@@ -2577,8 +2602,7 @@ function Configure_Slots() {
 
 	// If only one add/remove on one day, go back to that day
 	if ((($FormApptNo == "SlotAdd1") OR ($FormApptNo == "SlotRemove1"))
-	   AND (count($SlotSets) == 4)
-	   AND ($SlotCount == 1)) {
+	   AND (count($SlotSets) == 4)) {
 		$ApptView = "ViewDaily";
 		$FormApptNo = "NewDate";
 		$FirstSlotDate = $Date = $FormApptDate = $StartDate;
@@ -2654,11 +2678,13 @@ function InsertNewAppt($iName, $iPhone, $iEmail, $iTags, $iNeed, $iInfo, $iStatu
 	global $UserName;
 	global $UserOptions;
 	global $TodayDate;
+	global $ViewDate;
 	echo "\tvar RESERVED = \"$RESERVED\";\n";
 	echo "\tvar ApptView = \"$ApptView\";\n";
 	echo "\tvar UserName = \"$UserName\";\n";
 	echo "\tvar UserOptions = \"$UserOptions\";\n";
 	echo "\tvar TodayDate = \"$TodayDate\";\n";
+	echo "\tvar ViewDate = \"$FirstSlotDate\";\n";
 	echo "\tvar SummaryAll = " . (@$_SESSION["SummaryAll"] ? "true" : "false") . "\n";
 	global $ApptMove;
 	global $FormApptOldNo;
@@ -2722,11 +2748,10 @@ function InsertNewAppt($iName, $iPhone, $iEmail, $iTags, $iNeed, $iInfo, $iStatu
 
 ?>
 		// Move the current date in the calendar into focus (doesn't seem to work)
-		todayptr = document.getElementById("ID" + TodayDate);
-		if (todayptr != undefined) {
-			todayday = todayptr.innerHTML;
-			todayptr.focus();
-		}
+		if ((ViewDate == "") || (ViewDate == NullDate)) ViewDate = TodayDate;
+		focusId = "ID" + ViewDate.substr(0,7);
+		calptr = document.getElementById(focusId);
+		if (calptr !== undefined) calptr.scrollIntoView();
 
 		// if a move, scroll to highlighted line
 		mvptr = document.getElementsByClassName("apptSlotMoved");
@@ -2749,6 +2774,7 @@ function InsertNewAppt($iName, $iPhone, $iEmail, $iTags, $iNeed, $iInfo, $iStatu
 	//===========================================================================================
 		ApptView = ApptForm.IDApptView.value = viewRequest;
 		ApptForm.IDApptReason.value = "";
+		ApptForm.IDApptSlot.value = "";
 		switch (viewRequest) {
 			case "ViewCallback":
 			case "ViewCallback2":
@@ -3095,6 +3121,7 @@ function InsertNewAppt($iName, $iPhone, $iEmail, $iTags, $iNeed, $iInfo, $iStatu
 			ApptForm.IDApptEmail.value = FindByVal.value;
 			ApptForm.IDApptSlot.value = "FindByEmail";
 		}
+		ApptForm.IDApptDate.value = ViewDate;
 		ApptOp("Find");
 	}
 
@@ -3159,13 +3186,6 @@ function InsertNewAppt($iName, $iPhone, $iEmail, $iTags, $iNeed, $iInfo, $iStatu
 					message += "\n\nClick \"Cancel\" to return to the appointment box so you can save the appointment.";
 					if (! confirm(message)) return;
 				}
-				break;
-			//case "Scroll":
-			//	OpCode = (document.documentElement.scrollTop == "0") ? "MonthDown" : "MonthUp";
-			case "MonthUp":
-			case "MonthDown":
-				ApptForm.IDApptSlot.value = OpCode;
-				document.getElementById("ApptForm").submit();
 				break;
 			case "Find":
 				if (MoveMode) return;
@@ -3241,11 +3261,9 @@ function InsertNewAppt($iName, $iPhone, $iEmail, $iTags, $iNeed, $iInfo, $iStatu
 		var d = new Date();
 		var h = d.getHours();
 		var a = "am";
+		if (h > 11) a = "pm";
 		if (h == 0) h = 24;
-		if (h > 12) {
-			h -= 12;
-			a = "pm";
-			}
+		if (h > 12) h -= 12;
 		h = ("0" + h).substr(-2);
 		var m = ("0" + d.getMinutes()).substr(-2);
 		var t = "_" + h + ":" + m + a + ": ";
@@ -3420,6 +3438,7 @@ function InsertNewAppt($iName, $iPhone, $iEmail, $iTags, $iNeed, $iInfo, $iStatu
 		var reschar = String.fromCharCode(171); // reserved slot
 		var nameused = [];
 		var ApptsToPrint = ApptCount;
+		var Display_Date = +(Current_Date.substr(5,2)) + " / " + +(Current_Date.substr(8,2)) + " / " + Current_Date.substr(0,4);
 		for (var namecount = 1; namecount <= ApptsToPrint; namecount++) {
 
 			//find next alphabetical name
@@ -3445,7 +3464,7 @@ function InsertNewAppt($iName, $iPhone, $iEmail, $iTags, $iNeed, $iInfo, $iStatu
 				EROPrint.document.writeln("<div class='title'>");
 				EROPrint.document.writeln("\t<table>");
 				EROPrint.document.writeln("\t\t<tr>");
-				EROPrint.document.writeln("\t\t\t<th> __<u>" + Current_Date + "</u>__ Date</th>");
+				EROPrint.document.writeln("\t\t\t<th> __<u>" + Display_Date + "</u>__ Date</th>");
 				EROPrint.document.writeln("\t\t\t<th>Activity Reporting, Quality Review& ERO Tracking Log<th>");
 				EROPrint.document.writeln("\t\t\t<th>Page __<u>" + ++pagenumber + "</u>__</th>");
 				EROPrint.document.writeln("\t\t</tr>");
@@ -3530,6 +3549,7 @@ function InsertNewAppt($iName, $iPhone, $iEmail, $iTags, $iNeed, $iInfo, $iStatu
 		}
 
 		EROPrint.document.writeln("</body>");
+		EROPrint.print();
 	}
 
 	//===========================================================================================
@@ -3639,6 +3659,11 @@ function InsertNewAppt($iName, $iPhone, $iEmail, $iTags, $iNeed, $iInfo, $iStatu
 		// check input
 		if (_Verify_Time(TimeToAdd.value, true)[0]) return;
 		if (LocationToAdd.value == 0) { alert("Select a site for the new time group."); return; }
+		if (NewSlotsToAdd.value < 1) { alert("Enter the number of slots to add"); return; }
+		if (NewSlotsToAdd.value > 10) {
+			reply = confirm("Do you really want to add that many?");
+			if (! reply) return;
+		}
 
 		// Select "Add"
 		SlotAction.value = "SlotAdd1";
@@ -3655,7 +3680,7 @@ function InsertNewAppt($iName, $iPhone, $iEmail, $iTags, $iNeed, $iInfo, $iStatu
 
 		// set the time for 1 slot
 		SlotTime1.value = TimeToAdd.value;
-		SlotCount1.value = 1;
+		SlotCount1.value = NewSlotsToAdd.value;
 		SlotCount2.value =
 		SlotCount3.value =
 		SlotCount4.value =
@@ -3786,6 +3811,11 @@ function InsertNewAppt($iName, $iPhone, $iEmail, $iTags, $iNeed, $iInfo, $iStatu
 				break;
 			case "SlotRemoveAll":
 				WarnMessage = "This will remove all appointment data for a clean start, including \"deleted\" entries";
+				break;
+			case "SlotRemoveDateRange":
+				showSet = showD;
+				SetAllDOW = true;
+				WarnMessage = "This will remove all appointment data from " + SlotStart.value + " through " + SlotStop.value; 
 				break;
 		}
 		SBPatternOption.style.display = showSet[0];
@@ -4320,6 +4350,9 @@ function InsertNewAppt($iName, $iPhone, $iEmail, $iTags, $iNeed, $iInfo, $iStatu
 			<option value="SlotRemoveDel"
 				title="Clears and removes all in the deleted list">
 				Clear and remove the deleted list</option>
+			<option value="SlotRemoveDateRange"
+				title="Clears and removes all appointment structure and date from the start date through the stop date for this site">
+				Remove all appointment data between specified dates</option>
 			<option value="SlotRemoveAll"
 				title="Clears and removes all appointment structure and data for this site">
 				Start over - remove all appointment data</option>
@@ -4382,7 +4415,7 @@ function InsertNewAppt($iName, $iPhone, $iEmail, $iTags, $iNeed, $iInfo, $iStatu
 
 	<span id="SBSlots" onchange="Manage_Appointments(false, false);">
 		<br />Number of slots: <input id="SlotCount1" class="slotnum" type="number" />
-			at <input id="SlotTime1" class="slottime" type="time" value="24:00" />
+			at <input id="SlotTime1" class="slottime" type="time" />
 			with <input id="SlotRes1" class="slotnum" type="number" /> reserved.
 		<br />Number of slots: <input id="SlotCount2" class="slotnum" type="number" />
 			at <input id="SlotTime2" class="slottime" type="time" />

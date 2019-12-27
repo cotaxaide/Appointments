@@ -1,5 +1,5 @@
 <?php
-// Version 5.00
+// Version 5.01
 
 if (! file_exists("opendb.php")) {
 	require "environment.php";
@@ -54,8 +54,7 @@ while ($row = mysqli_fetch_array($sys)) {
 	}
 }
 
-// Get a list of locations
-
+// Get a list of locations which are accepting on-line appointments
 $j = 0;
 $query = "SELECT * FROM $SITE_TABLE";
 $query .= " WHERE `site_inet` <> ''";
@@ -110,7 +109,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 	}
 
 	// Process request
-	if (@$_SESSION["UserIndex"] > 0) { // i.e. Logged in
+	if (@$_SESSION["UserIndex"] > 0) { // i.e. Already logged in
 		$UserIndex = $_SESSION["UserIndex"];
 		$UserOptions = $_SESSION["UserOptions"];
 
@@ -123,7 +122,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
 				if ($emailTest["count"] == -1) {
 					$Errormessage .= "Your email was not changed.";
-					$Errormessage .= "<br />This email is already being used by " . $emailTest['user_first'] . " " . $emailTest['user_last'];
+					$Errormessage .= "<br />This email is already being used by "; 
+					$Errormessage .= $emailTest['user_first'] . " " . $emailTest['user_last'];
 					break;
 				}
 				else {
@@ -138,12 +138,12 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 					$query .= " WHERE `appt_email` = '$idoemail'";
 					mysqli_query($dbcon, $query);
 					$_SESSION["UserEmail"] = $FormLoginEmail;
-					$Usermessage .= "Your email has been changed as requested from $idoemail to $FormLoginEmail.";
+					$Usermessage .= "Your email has been changed as requested <br />from $idoemail <br />to $FormLoginEmail.";
 					break;
 				}
 
 			case "ChangePhone":
-				// Add the new phone number
+				// Add the new phone number - proper format is assumed
 				$query = "UPDATE `$USER_TABLE`";
 				$query .= " SET `user_phone` = '$FormLoginPhone'";
 				$query .= " WHERE `user_index` = '$UserIndex'";
@@ -156,14 +156,20 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 					mysqli_query($dbcon, $query);
 				}
 				$_SESSION["UserPhone"] = $FormLoginPhone;
-				$Usermessage .= "Your phone number has been changed";
+				$Usermessage .= "Your phone number has been changed<br />";
 				if ($idophone !=  "") $Usermessage .= " from $idophone";
 				$Usermessage .= " to $FormLoginPhone.";
 				break;
  		
 			case "ChangePW":
-				mysqli_query($dbcon, "UPDATE `$USER_TABLE` SET `user_pass` = '$FormLoginName' WHERE `user_index` = '$UserIndex' LIMIT 1");
-				$Usermessage .= "Your password has been changed as requested.";
+				if ($FormLoginName != "") {
+					$query = "UPDATE `$USER_TABLE`";
+					$query .= " SET `user_pass` = '$FormLoginName'";
+					$query .= " WHERE `user_index` = $UserIndex";
+					$query .= " LIMIT 1";
+					mysqli_query($dbcon, $query);
+					$Usermessage .= "Your password has been changed as requested.";
+				}
 				break;
  		}
 	}
@@ -191,14 +197,14 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 				$_SESSION["UserEmail"] = $UserEmail = $id['user_email'];
 				$_SESSION["UserPhone"] = $UserPhone = $id['user_phone'];
 				if ($UserHome == 0) { // is an internet user
-					// limit site list selection to their last appointment site
+					// set the site list to their last appointment site
 					$id['user_sitelist'] = "|";
 					if ($id['user_appt_site'] > 0) $id['user_sitelist'] .= $id['user_appt_site'] . "|";
 				}
 				$_SESSION["UserSiteList"] = $UserSiteList = $id['user_sitelist'];
 				$UserPass = $id['user_pass'];
 			}
-			if ($_SESSION["TRACE"]) error_log("INDEX: " . $UserName . ", assigned to " . $UserEmail); 
+			if ($_SESSION["TRACE"]) error_log("INDEX: " . $UserName . ", using email " . $UserEmail); 
 		}
 
 		if ($FormLoginEmail == $UserEmail) {
@@ -206,7 +212,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 			switch ($FormLoginAction) { 
 
 				case "NewUser":
-					$Errormessage .= "An account has already been set up with that email address.";
+					$Errormessage .= "An account has already exists with that email address.";
 					$UserIndex = $_SESSION["UserIndex"] = 0;
 					break;
 
@@ -239,17 +245,13 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 						mysqli_query($dbcon, $query);
 						if ($_SESSION["TRACE"]) error_log("INDEX: " . $UserName . ", logged in.");
 					}
-					else { // No match
+					else { // No password match
 						$_SESSION["UserIndex"] = $UserIndex = 0;
-
+						$Errormessage .= "Your email or password is not correct.";
 					}
 					break;
 
 				case "GetPW":
-					if ($UserEmail != $FormLoginEmail) {
-						$Errormessage .= "That email is not in our system";
-						break;
-					}
 					$str = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
 					$UserPass = substr(str_shuffle($str),rand(0,strlen($str)-8),8);
 					$UserPass0 = chr(134) . $UserPass; // Add a leading dagger for use later
@@ -286,6 +288,16 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 				default:
 					$Errormessage .= "Invalid request";
 					$_SESSION["UserIndex"] = 0;
+			}
+		}
+
+		else { // Emails don't match
+
+			switch ($FormLoginAction) { 
+
+				case "GetPW":
+					$Errormessage .= "That email is not in our system";
+					break;
 			}
 		}
 
@@ -330,6 +342,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 		}
 	}
 }
+
 // -----------------------------------------------------------------------------
 function Unique_Email($testId, $testEmail) {
 //	testId is the id that belongs to the email
@@ -688,7 +701,12 @@ function Unique_Email($testId, $testEmail) {
 				<td style="text-align: center;">Sign In
 					<table id="newlogin_data" class="init_data">
 					<tr><td>Email: </td><td><input type="email" id="LoginName0" /></td></tr>
-					<tr><td>Password: </td><td><input type="password" id="LoginPass0" onkeyup="Test_For_Enter(this.id,event);" /></td></tr>
+					<tr><td>Password: </td>
+						<td><input type="password" id="LoginPass0"
+							onkeyup="Test_For_Enter(this.id,event);"
+							onmouseover="this.type='text'"
+							onmouseout="this.type='password'" />
+						</td></tr>
 					<tr><td colspan="2"><input id="LoginRememberMe" type="checkbox" />Remember me on this PC.</td></tr>
 					<tr><td colspan="2" class="action_button"><button id="Login" onclick="Action_Request(this.id)">Sign in</button></td></tr>
 				</table>
@@ -853,5 +871,3 @@ function Unique_Email($testId, $testEmail) {
 </div> <!-- init_main -->
 
 </body>
-
-
