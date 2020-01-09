@@ -1,5 +1,5 @@
 <?PHP
-//Version 5.02
+//Version 5.02a
 //ini_set('display_errors', '1');
 
 // Set up environment
@@ -80,7 +80,7 @@ function logfile_print() {
 				$user_count[$event_user] = @$user_count[$event_user] + 1;
 				if (array_key_exists($event_user, $user_record)) {
 					//show_box("userbox", $event_user, $user_record[$event_user]);
-					$user_record[$event_user . " (" . $user_count[$event_user] . ")"] = $user_record[$event_user];
+					$user_record[$event_user . " (" . $user_count[$event_user] . ")"] = "\n<br />$event_timestamp[1]: [I] " . $user_record[$event_user];
 					$user_email[$event_user . " (" . $user_count[$event_user] . ")"] = $user_email[$event_user];
 				}
 				$user_record[$event_user] = "";

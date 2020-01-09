@@ -1,4 +1,9 @@
 <?php
+// Version 5.02a
+// 	Prevent restartup without password on same PC
+// 	Do not save password on PC with cookie, only userid
+// 	Change Remember me box default to unchecked unless remembered
+// 	Clear Remember me box if login name changes from remembered
 // Version 5.01
 
 if (! file_exists("opendb.php")) {
@@ -32,7 +37,7 @@ $UserSiteList = $UserIdentified ? $_SESSION["UserSiteList"] : "";
 $UserPass = "";
 $Alert = "";
 $gotophp = "index.php";
-$isAdministrator = ($UserOptions == "A") ? true:false;
+$isAdministrator = ($UserOptions == "A") ? true : false;
 
 // Get system greeting, notice and info from the system table
 $sysgreeting = "";
@@ -343,6 +348,12 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 	}
 }
 
+else { // Initial access with no action yet taken
+	$UserIndex = 0;
+	$UserOptions = 0;
+	$UserIdentified = false;
+}
+
 // -----------------------------------------------------------------------------
 function Unique_Email($testId, $testEmail) {
 //	testId is the id that belongs to the email
@@ -389,11 +400,11 @@ function Unique_Email($testId, $testEmail) {
 <script>
 <?php
 	global $DEBUG, $UserIndex, $UserOptions;
-	$d = ($DEBUG) ? "true":"false";
+	$d = ($DEBUG) ? "true" : "false";
 	echo "	var DEBUG = $d;\n";
 	$uid = ($UserIndex > 0) ? $UserIndex : 0;
 	echo "	var uid = $uid;\n";
-	$uhm = (($UserIndex > 0) and (($UserOptions == 'A') OR ($UserOptions == 'M'))) ? "true":"false";
+	$uhm = (($UserIndex > 0) and (($UserOptions == 'A') OR ($UserOptions == 'M'))) ? "true" : "false";
 	echo "	var uhm = $uhm;\n";
 ?>
 	var c0 = ""; // email cookie
@@ -402,18 +413,17 @@ function Unique_Email($testId, $testEmail) {
 	/* ******************************************************************************************************************* */
 	function Initialize() {
 	/* ******************************************************************************************************************* */
-		LoginDiv.style.display = (DEBUG) ? "block":"none";
-		init_login.style.display = (!uid) ? "block":"none";
-		newlogin_data.style.display = (!uid) ? "block":"none";
-		init_newuser.style.display = (!uid) ? "block":"none";
-		init_getpw.style.display = (!uid) ? "block":"none";
-		init_chgpw.style.display = (uid) ? "block":"none";
-		init_chgem.style.display = (uid) ? "block":"none";
-		init_chgph.style.display = (uid) ? "block":"none";
-		init_appt.style.display = (uid) ? "block":"none";
-		init_site.style.display = (uhm) ? "block":"none";
-		init_logout.style.display = (uid) ? "block":"none";
-		if (!uid) LoginName0.focus();
+		LoginDiv.style.display = (DEBUG) ? "block" : "none";
+		init_login.style.display = (!uid) ? "block" : "none";
+		newlogin_data.style.display = (!uid) ? "block" : "none";
+		init_newuser.style.display = (!uid) ? "block" : "none";
+		init_getpw.style.display = (!uid) ? "block" : "none";
+		init_chgpw.style.display = (uid) ? "block" : "none";
+		init_chgem.style.display = (uid) ? "block" : "none";
+		init_chgph.style.display = (uid) ? "block" : "none";
+		init_appt.style.display = (uid) ? "block" : "none";
+		init_site.style.display = (uhm) ? "block" : "none";
+		init_logout.style.display = (uid) ? "block" : "none";
 		Change_Option("login"); // collapse all boxes except login
 		<?php
 		global $Alert;
@@ -422,7 +432,17 @@ function Unique_Email($testId, $testEmail) {
 
 		// Read login cookies if present
 		Read_Cookie();
-		LoginRememberMe.checked = ((c0 > "") && (c1 > "")) ? true:false;
+		if (!LoginName0.value) LoginName0.focus();
+		else LoginPass0.focus();
+		// Was LoginName remembered
+		LoginRememberMe.checked = (c0);
+	}
+
+	/* ******************************************************************************************************************* */
+	function Change_Login(newid) {
+	/* ******************************************************************************************************************* */
+		// Clear remember me checkbox if remembered email is changed
+		LoginRememberMe.checked = (newid.toLowerCase().trim() === c0.toLowerCase().trim());
 	}
 
 	/* ******************************************************************************************************************* */
@@ -430,11 +450,11 @@ function Unique_Email($testId, $testEmail) {
 	/* ******************************************************************************************************************* */
 		if (id != "login") init_message.innerHTML = "";
 		if (id != "login") error_message.innerHTML = "";
-		newinit_data.style.display = (id == "newuser") ? "block":"none"; 
-		chgpw_data.style.display = (id == "chgpw") ? "block":"none"; 
-		chgem_data.style.display = (id == "chgem") ? "block":"none"; 
-		chgph_data.style.display = (id == "chgph") ? "block":"none"; 
-		getpw_data.style.display = (id == "getpw") ? "block":"none"; 
+		newinit_data.style.display = (id == "newuser") ? "block" : "none"; 
+		chgpw_data.style.display = (id == "chgpw") ? "block" : "none"; 
+		chgem_data.style.display = (id == "chgem") ? "block" : "none"; 
+		chgph_data.style.display = (id == "chgph") ? "block" : "none"; 
+		getpw_data.style.display = (id == "getpw") ? "block" : "none"; 
 		switch (id) {
 			case "getpw": {
 				LoginGetPWEmail.value = LoginName0.value; 
@@ -594,25 +614,22 @@ function Unique_Email($testId, $testEmail) {
 		// Is the RememberMe box checked or unchecked?
 		if (LoginRememberMe.checked) {
 			var d = new Date(); // set cookie expiration date
-				d.setTime(d.getTime() + (2*366*24*60*60*1000)); // 2 years
+				d.setTime(d.getTime() + (2.2*366*24*60*60*1000)); // 2.2 years
 			var CookieExpires = "expires=" + d.toUTCString() + ";";
 			c0 = LoginName0.value + ';';
-			c1 = LoginPass0.value + ';';
+			//c1 = LoginPass0.value + ';';
+			c1=';';
 		}
 		else {
 			CookieExpires = "expires=Thu, 01 Jan 1970 00:00:00 GMT;"; // unchecked
-			c0='"";';
-			c1='"";';
+			c0=';';
+			c1=';';
 		}
 
 		document.cookie = "TA_Appt_0=" + c0 + CookieExpires + " path=/;";
+		// erase previously stored password cookie
+		CookieExpires = "expires=Thu, 01 Jan 1970 00:00:00 GMT;";
 		document.cookie = "TA_Appt_1=" + c1 + CookieExpires + " path=/;";
-
-		// Did the cookie get set correctly?
-		//Read_Cookie();
-		if (LoginRememberMe.checked) {
-			if ((c0 == "") || (c1 == "")) alert("Cookie could not be set. Your password will not be remembered.");
-		}
 	}
 
 	//===========================================================================================
@@ -625,14 +642,15 @@ function Unique_Email($testId, $testEmail) {
 			while (cn.charAt(0)==' ') cn = cn.substring(1);
 			var cookieVar = cn.split("=");
 			if (cookieVar[0] == "TA_Appt_0") LoginName0.value = c0 = cookieVar[1];
-			if (cookieVar[0] == "TA_Appt_1") LoginPass0.value = c1 = cookieVar[1];
+			//if (cookieVar[0] == "TA_Appt_1") LoginPass0.value = c1 = cookieVar[1];
+			LoginPass0.value = "";
 		}
 	}
 
 	//===========================================================================================
 	function Show_History() {
 	//===========================================================================================
-		change_history.style.display = (change_history.style.display == 'none') ? 'block':'none';
+		change_history.style.display = (change_history.style.display == 'none') ? 'block' : 'none';
 	}
 
 </script>
@@ -700,7 +718,7 @@ function Unique_Email($testId, $testEmail) {
 				<td><img src="Images/opendoor.png" style="width:5em; cursor: pointer;" id="login" onclick="Action_Request('Login')"></td>
 				<td style="text-align: center;">Sign In
 					<table id="newlogin_data" class="init_data">
-					<tr><td>Email: </td><td><input type="email" id="LoginName0" /></td></tr>
+					<tr><td>Email: </td><td><input type="email" id="LoginName0" onchange="Change_Login(this.value);" /></td></tr>
 					<tr><td>Password: </td>
 						<td><input type="password" id="LoginPass0"
 							onkeyup="Test_For_Enter(this.id,event);"
@@ -742,8 +760,8 @@ function Unique_Email($testId, $testEmail) {
 				<tr><td>Your last name: </td><td><input id="LoginLName1" /></td></tr>
 				<tr><td>Email: </td><td><input id="LoginEmail1" type="email" /></td></tr>
 				<tr><td>Phone: </td><td><input id="LoginPhone1" type="email" /></td></tr>
-				<tr><td>Password: </td><td><input id="LoginPass1a" /></td></tr>
-				<tr><td>Re-enter Password: </td><td><input id="LoginPass1b" onkeyup="Test_For_Enter(this.id,event);" /></td></tr>
+				<tr><td>Password: </td><td><input id="LoginPass1a" type="password"/></td></tr>
+				<tr><td>Re-enter Password: </td><td><input id="LoginPass1b" type="password" onkeyup="Test_For_Enter(this.id,event);" /></td></tr>
 				<tr><td colspan="2" class="action_button">
 					<button id="NewUser" onclick="Action_Request(this.id)">Create your ID</button>
 					<button onclick="Change_Option('Login')">Cancel</button>

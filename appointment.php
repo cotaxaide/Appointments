@@ -2,6 +2,10 @@
 //ini_set('display_errors', '1');
 
 // ---------------------------- VERSION HISTORY -------------------------------
+//File Version 5.02a
+//	Should not be able to add to CB list if site is not open for appointments
+//	Fixed apostrophe in site appointment message
+//	Prevent user from adding appointments with a different email or phone
 //File Version 5.02
 //	Fixed undefined variable when viewing Callback list
 //	Sites not visible in UserView due to calendar space at 50%
@@ -1235,6 +1239,8 @@ function Show_Slots() {
 	global $LocationInet;
 	global $LocationInetLimit;
 	global $LocationIsOpen;
+	global $LocationOpen;
+	global $LocationClosed;
 	global $LocationSumRes;
 	global $Location10dig;
 	global $LocationCBList, $LocationEmpty;
@@ -1624,7 +1630,7 @@ function Show_Slots() {
 					echo "</li>\n";
 				}
 				echo "<li>Click on a green time in the list below.</li>\n";
-				echo "<li>In the information box that appears, enter your (and spouse's) names. (If your phone number or email address needs to be changed, please do so from the login page.)</li>\n";
+				echo "<li>In the information box that appears, enter your (and spouse&apos;s) names. (If your phone number or email address needs to be changed, please do so from the <a href=\"index.php\">login page</a>.)</li>\n";
 				echo "<li>In the notes section, indicate which year (if not the current year) and if it is an amended return. Also, enter any other information you think we might need (interpreter, access issues, alternative phone, etc).</li>\n";
 				echo "<li>Click on the &quot;Save&quot; button to finalize the appointment.</li>\n";
 
@@ -1907,11 +1913,12 @@ function Show_Slots() {
 					echo "<br /><br />You are on the callback list should an opening become available,";
 					echo "<br />&nbsp;";
 				}
-				else {
+				else if ($LocationIsOpen[$LocationLookup["S" . $SingleSite]]) {
 					echo "<br /><br />If you would like to be placed on the callback list should an opening become available,";
 					echo " please click on the following button to give us your contact information:";
 					echo "<br /><button id='custButton' onclick='Add_Appointment($OpenSlotNumber, \"$NullDate\", \"$NullTime\", \"$NullDate\", \"$NullTime\");'>Click to request a callback</button>\n";
 				}
+				else echo "<br />&nbsp;";
 				echo "</div>\n";
 				break;
 			case (($UserHome == 0) and $InetLimited):
@@ -2227,6 +2234,7 @@ function Send_Email($Request, $View, $Name, $Email, $Date, $Time, $Location) {
 				$NewMessage .= "Your AARP Tax-Aide friends at the [SITENAME].";
 			}
 			$message = str_replace("%%", "\n", $message);
+			$message = str_replace("&apos;", "'", $message);
 			$message = str_replace("[TPNAME]", $Name, $message);
 			$message = str_replace("[TIME]", $Time, $message);
 			$message = str_replace("[DATE]", $Date, $message);
@@ -2747,11 +2755,13 @@ function InsertNewAppt($iName, $iPhone, $iEmail, $iTags, $iNeed, $iInfo, $iStatu
 		if (substr($FormApptNo, 0, 6) == "FindBy") echo "SearchBox.style.visibility = 'visible';\n";
 
 ?>
-		// Move the current date in the calendar into focus (doesn't seem to work)
-		if ((ViewDate == "") || (ViewDate == NullDate)) ViewDate = TodayDate;
-		focusId = "ID" + ViewDate.substr(0,7);
-		calptr = document.getElementById(focusId);
-		if (calptr !== undefined) calptr.scrollIntoView();
+		// Move the current date in the calendar into focus
+		if (ApptView !== "ViewUser") {
+			if ((ViewDate == "") || (ViewDate == NullDate)) ViewDate = TodayDate;
+			focusId = "ID" + ViewDate.substr(0,7);
+			calptr = document.getElementById(focusId);
+			if (calptr !== undefined) calptr.scrollIntoView();
+		}
 
 		// if a move, scroll to highlighted line
 		mvptr = document.getElementsByClassName("apptSlotMoved");
@@ -3182,7 +3192,7 @@ function InsertNewAppt($iName, $iPhone, $iEmail, $iTags, $iNeed, $iInfo, $iStatu
 				if (ApptView == "ViewUser") {
 					message = "Your appointment is not confirmed.";
 					message += "\n\nYou need to click the \"Save\" button to do that.";
-					message += "\n\nClick \"OK\" to continue to cancel your request.";
+					message += "\n\nClick \"OK\" to continue to remove your request.";
 					message += "\n\nClick \"Cancel\" to return to the appointment box so you can save the appointment.";
 					if (! confirm(message)) return;
 				}
@@ -3192,6 +3202,8 @@ function InsertNewAppt($iName, $iPhone, $iEmail, $iTags, $iNeed, $iInfo, $iStatu
 				// no break
 			case "LogOut":
 			case "Save":
+				ApptForm.IDApptPhone.disabled = "";
+				ApptForm.IDApptEmail.disabled = "";
 				if (StatusOther.value != "") Add_Comment("StatusOther");
 				if (ApptBox.style.visibility == "visible") {
 					if (ApptForm.IDApptName.value == "") {
@@ -4248,12 +4260,16 @@ function InsertNewAppt($iName, $iPhone, $iEmail, $iTags, $iNeed, $iInfo, $iStatu
 					if (($UserHome == 0) OR ($Location10dig[$LocationLookup['S' . $UserHome]])) echo ', including area code'
 					?>"
 					onchange="Test_Phone()"
-					value="<?php global $ApptView, $UserPhone; if ($ApptView=='ViewUser') echo ($UserPhone); ?>" /></td></tr>
+					<?php global $ApptView, $UserPhone;
+					if ($ApptView=='ViewUser') echo ('value="' . $UserPhone . '" disabled="disabled"'); ?>
+					/></td></tr>
 
 			<tr>	<td>Email: </td>
 				<td><input id="IDApptEmail" name="IDApptEmail" class="formtext" type="text"
 					title="Enter the primary taxpayer's email" onchange="Test_Email()" 
-					value="<?php global $ApptView, $UserEmail; if ($ApptView=='ViewUser') echo (htmlspecialchars_decode($UserEmail)); ?>" /></td></tr>
+					<?php global $ApptView, $UserEmail;
+					if ($ApptView=='ViewUser') echo ('value="' . htmlspecialchars_decode($UserEmail) . '" disabled="disabled"'); ?>
+					/></td></tr>
 			<tr <?php global $ApptView; if ($ApptView == "ViewUser") echo "style='display: none;'" ?>>
 				<td>Tags: </td>
 				<td style="text-align: left; font-weight: normal; font-size: 80%;">(Will print after the name in the daily view)</td></tr>
@@ -4516,3 +4532,6 @@ function InsertNewAppt($iName, $iPhone, $iEmail, $iTags, $iNeed, $iInfo, $iStatu
 		echo "</script>\n";
 	}
 ?>
+
+</body>
+</html>

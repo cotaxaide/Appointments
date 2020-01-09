@@ -4,7 +4,9 @@
 // - creates the opendb.php file so that all php routines have access to the database
 
 //--------------------------------- VERSION HISTORY -----------------------------------
-$VERSION = "5.02";
+$VERSION = "5.02a";
+//	Updated index.php, sitemanage.php, appointment.php, reminders.php, viewtrace.php
+//$VERSION = "5.02";
 //	Updated appointment.php, sitemanage.php, added viewtrace.php
 //$VERSION = "5.01c";
 //	Updated appointment.php, environment.php

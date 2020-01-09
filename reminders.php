@@ -1,4 +1,6 @@
 <?PHP
+//Version 5.02a
+//	Fixed apostrophe problem in site appointment message
 //Version 5.01
 //ini_set('display_errors', '1');
 
@@ -78,6 +80,7 @@ while($row = mysqli_fetch_array($appointments)) {
 	$subject = "Your Tax-Aide appointment";
 
 	$message = htmlspecialchars_decode($siteMessage[$siteIndex]);
+	$message = str_replace("&apos;", "'", $message);
 	$message = str_replace("&amp;", "&", $message);
 	$message = str_replace("%%", "\n", $message);
 	$message = str_replace("[TPNAME]", $apptName, $message);

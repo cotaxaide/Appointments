@@ -2,6 +2,9 @@
 // ini_set('display_errors', '1');
 
 // ---------------------------- VERSION HISTORY -------------------------------
+// File Version 5.02a
+// 	Apostrophe in site message would not save
+// 	Added a test to assure non-A/Ms could not access
 // File Version 5.02
 // 	Added a link to view the trace file
 // File Version 5.01b
@@ -22,6 +25,8 @@ if (@$_SESSION["UserIndex"] == 0) {
 }
 
 // Global variables
+$isAdministrator = ($_SESSION["UserOptions"] == "A");
+$isAppointmentManager = ($_SESSION["UserOptions"] == "M");
 $DEBUG = "" . $_SESSION["DEBUG"];
 $DEBUG = true;
 $Errormessage = "";
@@ -44,8 +49,6 @@ $UserPreferred = "";
 $SiteView = "Site";
 $Administrators = "";
 $AppointmentManagers = 0;
-$isAdministrator = ($_SESSION["UserOptions"] == "A");
-$isAppointmentManager = ($_SESSION["UserOptions"] == "M");
 $Alert = "";
 $AFlag = "&#x26EF;";
 $MFlag = "&#x2605;";
@@ -71,7 +74,12 @@ $SystemURL = $_SESSION["SystemURL"];
 if (!isset($_SESSION["SystemEmail"])) $_SESSION["SystemEmail"] = "no_reply@tax_aide_reservations.no_email";
 $SystemEmail = $_SESSION["SystemEmail"];
 if (! isset($_SESSION["UserSort"])) $_SESSION["UserSort"] = "user_last";
-//if ($_SESSION["TRACE"]) error_log("MANAGE: " . $UserFirst . " " . $UserLast . "(" . $ThisName . ")");
+// Check user permission
+if ((! $isAdministrator) AND (! $isAppointmentManager)) {
+	header('Location: index.php'); // prevents direct access to this page (must sign in first).
+	if ($_SESSION["TRACE"]) error_log("MANAGE: $ThisName, $UserFirst $UserLast lacks access permission");
+	exit;
+}
 
 // Create a default email confirmation message for new sites
 $ConfirmMessage = "NONEWelcome, [TPNAME]:\n\n";
@@ -2474,7 +2482,7 @@ function Show_Search() {
 				SiteForm.SiteContact.value = new_contact;
 				SiteForm.SiteSumres.value = new_sumres;
 				SiteForm.Site10dig.value = new_10dig;
-				SiteForm.SiteMessage.value = site_message.value.replace(/\n/g,"%%");
+				SiteForm.SiteMessage.value = site_message.value.replace(/\n/g,"%%").replace(/\'/g,"&apos;");
 				SiteForm.SiteReminder.value = new_reminder;
 				SiteForm.SiteLastRem.value = new_lastrem;
 				SiteForm.SiteOptions.value = new_site_options;
@@ -2492,7 +2500,7 @@ function Show_Search() {
 				SiteForm.SiteContact.value = new_contact;
 				SiteForm.SiteSumres.value = new_sumres;
 				SiteForm.Site10dig.value = new_10dig;
-				SiteForm.SiteMessage.value = site_message.value.replace(/\n/g,"%%");
+				SiteForm.SiteMessage.value = site_message.value.replace(/\n/g,"%%").replace(/\'/g,"&apos;");
 				SiteForm.SiteReminder.value = new_reminder;
 				SiteForm.SiteLastRem.value = new_lastrem;
 				SiteForm.SiteOptions.value = new_site_options;
@@ -3006,7 +3014,7 @@ function Test_For_Enter(id, e) {
 								</td></tr>
 							<tr><td>
 								<!-- do not split the folowing line -->
-								<textarea id="site_message"><?php global $ThisMessage; echo str_replace("%%","\n",$ThisMessage);?></textarea></td>
+								<textarea id="site_message"><?php global $ThisMessage; $ThisMessage = str_replace("%%","\n",$ThisMessage); $ThisMessage = str_replace("&apos;","'",$ThisMessage);echo ($ThisMessage);?></textarea></td>
 								<td>The message can contain any of the shortcodes listed above as well as the following:
 								<br /><br />[TPNAME] (Taxpayer&apos;s name(s))
 								<br />[DATE] [TIME] (Appointment date &amp; time)
