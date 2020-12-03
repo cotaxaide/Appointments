@@ -2,6 +2,16 @@
 //ini_set('display_errors', '1');
 
 // ---------------------------- VERSION HISTORY -------------------------------
+//File Version 6.01
+//	Added site instruction box for UserView screen
+//File Version 5.02c
+//	Fixed creation of callback records when not needed
+//	Fixed moving of a callback record to a different site callback record
+//File Version 5.02b
+//	Fixed saving a callback entry moves that entry to the bottom of the list, now retains position
+//	Clarified delete title and warning message for callback list due to appointment vs callback confusion
+//	Suppressed some indexing errors that did not cause a problem but cluttered the error log
+//	Changed email "From:" to a no-reply due to email blocking for some real accounts
 //File Version 5.02a
 //	Should not be able to add to CB list if site is not open for appointments
 //	Fixed apostrophe in site appointment message
@@ -335,7 +345,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 				else {
 					$query .= ", `appt_type` = ''";
 					// If user is being added to Callback list, update wait sequence number
-					if (($dy0 == $NullDate) and (($ApptView == "ViewUser") OR ($ApptView == "ViewCallback"))) {
+					if (($dy0 == $NullDate) and ($wait0 == 0) and (($ApptView == "ViewUser") OR ($ApptView == "ViewCallback"))) {
 						$MaxWaitSequence = ++$_SESSION["MaxWaitSequence"];
 						$query .= ", `appt_wait` = '$MaxWaitSequence'";
 					}
@@ -474,6 +484,7 @@ while ($row = mysqli_fetch_array($locs)) {
 	$SiteOpen = $row["site_open"];
 	$SiteClosed = $row["site_closed"];
 	$SiteMessage = htmlspecialchars_decode($row["site_message"]);
+	$SiteInstructions = htmlspecialchars_decode($row["site_instructions"]);
 	$SiteAddress = htmlspecialchars_decode($row["site_address"]);
 	$SiteContact = htmlspecialchars_decode($row["site_contact"]);
 	$LocationLookup[$SiteSIndex] = 0; // definition only, will be changed below
@@ -501,6 +512,7 @@ while ($row = mysqli_fetch_array($locs)) {
 			$LocationAddress[$j] = $SiteAddress;
 			$LocationContact[$j] = $SiteContact;
 			$LocationMessage[$j] = $SiteMessage;
+			$LocationInstructions[$j] = $SiteInstructions;
 			$LocationLookup[$SiteSIndex] = $j;
 
 			if ($SiteIndex == $UserHome) {
@@ -623,12 +635,12 @@ function Create_Menu() {
 //===========================================================================================
 function Calc_Slots() {
 //	Calculates the number of appointments for each date and if any are available
-//	Calls Make_Calendar() to display 3 months starting with first available slot
 //===========================================================================================
 	global $Debug, $Errormessage;
 	global $DateList, $DateFlag, $DateLoc, $TodayDate, $NullDate, $FirstMonth, $FirstYear, $LastMonth, $LastYear;
 	global $APPT_TABLE, $FirstSlotDate;
 	global $LocationShow, $LocationLookup, $LocationList, $LocationName;
+	global $LocationIndex;
 	global $SiteNameList;
 	global $VERSION, $Errormessage;
 	global $CustEList, $CustPList, $UserEmail, $UserPhone;
@@ -646,7 +658,6 @@ function Calc_Slots() {
 	global $Name, $Date, $Appt, $Phone, $Email;
 	global $Date, $Time, $TodayDate, $NullDate;
 	global $Appt, $Name, $Type;
-	global $LocationIndex;
 
 	$OldMO = "";
 	$Date = $TodayDate;
@@ -742,7 +753,7 @@ function Calc_Slots() {
 			$query .= " WHERE `appt_no` = $Appt";
 			mysqli_query($dbcon, $query);
 			if ($_SESSION["TRACE"]) {
-				error_log("APPT: " . $UserName . ", System deleted record with Name  " . $Name . ", site " . $Location);
+				error_log("APPT: SYSTEM, Deleted record with Name  " . $Name . ", site " . $Location);
 			}
 			continue;
 		}
@@ -759,12 +770,20 @@ function Calc_Slots() {
 		// Make a list of appointments with the same phone or email for the user view
 		if ($ApptView == "ViewUser") User_view_list();
 
+		// $LocationIndex undefined causes an undefined offset error DEBUG
+		if (!isset($LocationShow[$LocationIndex])) {
+			error_log("APPTX: SYSTEM, LocationIndex=" . $LocationIndex);
+			error_log("APPTX: SYSTEM, LocationName=" . $LocationName[$LocationIndex]);
+			//$LocationShow[$LocationIndex] = 0;
+		}
 		if (($Type != "D") AND ($LocationShow[$LocationIndex] > 0)){
 
 			// Count callback list slots
+			if (! isset($AvailableCBSlots[$LocationIndex])) $AvailableCBSlots[$LocationIndex] = 0;
+			if (! isset($LocationCBList[$LocationIndex])) $LocationCBList[$LocationIndex] = 0;
 			if ($Date == $NullDate) {
-				if ($Name == "") @$AvailableCBSlots[$LocationIndex]++;
-				else @$LocationCBList[$LocationIndex]++; // count how many names there are
+				if ($Name == "") $AvailableCBSlots[$LocationIndex]++;
+				else $LocationCBList[$LocationIndex]++; // count how many names there are
 			}
 
 			// Analyze used (or reserved) dates
@@ -834,7 +853,7 @@ function Calc_Slots() {
 
 	// Add a blank Callback slot for any site that doesn't have one
 	for ($j = 1; $j <= $LocationList[0]; $j++) {
-		if (! @$AvailableCBSlots[$j]) {
+		if (isset($AvailableCBSlots[$j]) and (! $AvailableCBSlots[$j])) {
 			InsertNewAppt('', '', '', '', '', '', '', '', '0000-00-00', '0000-00-00' , $LocationList[$j], 'SYSTEM');
 		}
 	}
@@ -1235,6 +1254,7 @@ function Show_Slots() {
 	global $LocationList;
 	global $LocationLookup;
 	global $LocationMessage;
+	global $LocationInstructions;
 	global $LocationName;
 	global $LocationInet;
 	global $LocationInetLimit;
@@ -1474,7 +1494,7 @@ function Show_Slots() {
 						$ApptName .= ", \"\"";
 						$ApptPhone .= ", \"\"";
 						$ApptEmail .= ", \"\"";
-						$ApptSite .= ", \"\"";
+						$ApptSite .= ", \"$OldLoc\"";
 						$Appt10dig .= ", \"$Location10digreq\"";
 						$ApptTags .= ", \"\"";
 						$ApptNeed .= ", \"\"";
@@ -1574,7 +1594,7 @@ function Show_Slots() {
 			$ApptName .= ", \"\"";
 			$ApptPhone .= ", \"\"";
 			$ApptEmail .= ", \"\"";
-			$ApptSite .= ", \"\"";
+			$ApptSite .= ", \"$OldLoc\"";
 			$ApptTags .= ", \"\"";
 			$ApptNeed .= ", \"\"";
 			$ApptInfo .= ", \"\"";
@@ -1643,6 +1663,22 @@ function Show_Slots() {
 				}
 
 				echo "</ol>\n";
+
+				// Add the site's instruction block
+				if ($LocationChosen > 0) {
+					$Loc = $LocationLookup["S" . $LocationChosen];
+					$msg = $LocationInstructions[$Loc];
+					if ($msg) {
+						echo "<div class='custCB'>";
+						$LocName = $LocationName[$Loc];
+						echo "<b>Additional information for the $LocName:</b><br />";
+						echo "<div style='width: 100%; padding-left: 1em;'>";
+						$fixmsg = str_replace("%%", "<br />", $msg);
+						$fixmsg = str_replace("!", "&apos;", $fixmsg);
+						echo "$fixmsg";
+						echo "</div></div><br />";
+					}
+				}
 			}
 			else {
 				echo "<br /><br />Sorry, no Tax-Aide sites are currently accepting appointments on line.<br /><br />\n";
@@ -2206,13 +2242,10 @@ function Send_Email($Request, $View, $Name, $Email, $Date, $Time, $Location) {
 	$to = htmlspecialchars_decode($Email);
 
 	$from = (isset($SiteAddress[5]) AND ($SiteAddress[5] != "")) ? $SiteAddress[5] : @$_SESSION["SystemEmail"];
-	if ($from == "") $from = "no-reply@tax-aide-reservations.no-email";
+	/*if ($from == "")*/ $from = "no-reply@tax-aide-reservations.no-email";
 	$from = htmlspecialchars_decode($from);
 
 	$headers = "From: " . $LocationName[$LocIndex] . " Tax-Aide <" . $from . ">";
-	if ($_SESSION["TRACE"]) {
-		error_log("APPT: " . $UserName . ", Email to ". $Email . " " . $headers);
-	}
 	
 	$subject = "Your Tax-Aide appointment";
 
@@ -2259,6 +2292,8 @@ function Send_Email($Request, $View, $Name, $Email, $Date, $Time, $Location) {
 	}
 	else {
 		$success = mail($to, $subject, $message, $headers);
+		$message = $headers . "\n" . "To: " . $to . "\n" . $message;
+		//mail("appt@bogarthome.net", $subject, $message, $headers);
 		if (! $success) {
 			$Errormessage .= "Not able to send email to $Name at $Email.";
 			$emerr = error_get_last()['message'];
@@ -2271,6 +2306,9 @@ function Send_Email($Request, $View, $Name, $Email, $Date, $Time, $Location) {
 			$query .= ", `appt_emailsent` = '$TodayDate'";
 			$query .= " WHERE `appt_no` = $FormApptNo";
 			mysqli_query($dbcon, $query);
+			if ($_SESSION["TRACE"]) {
+				error_log("APPT: " . $UserName . ", Email to ". $Email . " " . $headers);
+			}
 		}
 	}
 	$EM_Reason = "";
@@ -2933,18 +2971,20 @@ function InsertNewAppt($iName, $iPhone, $iEmail, $iTags, $iNeed, $iInfo, $iStatu
 				IDApptSendEmail.style.display = (IDApptEmail.value) ? "inline" : "none";
 			}
 
-			htitle = "Appointment " + IDX;
 			switch (ApptView) {
 				case "ViewCallback":
+					htitle = "Entry " + IDX;
 					htitle += " on Callback List";
 					IDApptSendEmail.style.display = "none";
 					break;
 				case "ViewDeleted":
+					htitle = "Entry " + IDX;
 					htitle += " on Deleted List";
 					IDApptDelete.style.display = "none";
 					IDApptSendEmail.style.display = "none";
 					break;
 				default:
+					htitle = "Appointment " + IDX;
 					htitle += " on " + Display_Date + " at " + ApptTimeVal[Current_Record];
 					hloc = document.getElementById("LocName" + ApptSiteVal[Current_Record]);
 					htitle += " at the " + hloc.innerHTML;
@@ -3162,7 +3202,11 @@ function InsertNewAppt($iName, $iPhone, $iEmail, $iTags, $iNeed, $iInfo, $iStatu
 
 		switch (OpCode) {
 			case "Delete":
-				var confirmanswer = confirm("Are you sure you want to remove " + ApptForm.IDApptName.value + "'s appointment?");
+				var confirmQ = "Are you sure you want to remove " + ApptForm.IDApptName.value + "'s appointment?";
+				if (ApptView == "ViewCallback") {
+					confirmQ = "Are you sure you want to remove " + ApptForm.IDApptName.value + "'s callback entry?";
+				}
+				confirmanswer = confirm(confirmQ);
 				if (!confirmanswer) return;
 				ApptForm.IDApptName.value = ApptForm.IDApptName.value.replace(/'/g, "!");
 				ApptForm.IDApptName.value = ApptForm.IDApptName.value.replace(/"/g, "");
@@ -4266,7 +4310,7 @@ function InsertNewAppt($iName, $iPhone, $iEmail, $iTags, $iNeed, $iInfo, $iStatu
 
 			<tr>	<td>Email: </td>
 				<td><input id="IDApptEmail" name="IDApptEmail" class="formtext" type="text"
-					title="Enter the primary taxpayer's email" onchange="Test_Email()" 
+					title="Enter the taxpayer's email" onchange="Test_Email()" 
 					<?php global $ApptView, $UserEmail;
 					if ($ApptView=='ViewUser') echo ('value="' . htmlspecialchars_decode($UserEmail) . '" disabled="disabled"'); ?>
 					/></td></tr>
@@ -4535,3 +4579,4 @@ function InsertNewAppt($iName, $iPhone, $iEmail, $iTags, $iNeed, $iInfo, $iStatu
 
 </body>
 </html>
+

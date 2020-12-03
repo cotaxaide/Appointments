@@ -1,4 +1,6 @@
 <?PHP
+//Version 5.02b
+//	Absorb duplicates
 //Version 5.02a
 //ini_set('display_errors', '1');
 
@@ -24,6 +26,8 @@ function logfile_print() {
 	// open the trace file
 	$getanother = 0;
 	$old_date = "";
+	$last_entry = "";
+	$last_entry_count = 0;
 	$user_record = [];
 	$user_email = [];
 	$user_count = [];
@@ -31,7 +35,19 @@ function logfile_print() {
 	while (!feof($logfile) /* AND ($getanother < 500) */ ) {
 		$event_entry = fgets($logfile);
 		if (! $event_entry) continue;
+		if (trim($event_entry) == "") continue;
+		if (substr($event_entry, 0, 8) == "Warning:") continue;
+		if ($event_entry == $last_entry) {
+			$last_entry_count++;
+			continue;
+		}
+		else {
+			//echo "[" . $last_entry_count-1 . " dups]";
+			$last_entry_count = 0;
+			$last_entry = $event_entry;
+		}
 		$end_of_timestamp = strpos($event_entry, "]");
+		$event_timestamp[0] = $event_timestamp[1] = "";
 		$event_timestamp = explode(" ", substr($event_entry, 1, $end_of_timestamp - 2));
 		$event = substr($event_entry, $end_of_timestamp + 1);
 		if ($event_timestamp[0] != $old_date) {
@@ -108,7 +124,7 @@ function logfile_print() {
 			// Show raw event
 			//echo "\n<div class='errorbox'>$event_timestamp[1] on $event_timestamp[0]";
 			//echo "\n<br />$event_module<br />User: $event_user<br />Event: $event_data</div>";
-			echo "\n<div class='errorbox'>$event_timestamp[1]: $event</div>";
+			echo "\n<div class='errorbox'>@$event_timestamp[1]: $event</div>";
 		}
 
 		$getanother++;

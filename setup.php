@@ -4,7 +4,11 @@
 // - creates the opendb.php file so that all php routines have access to the database
 
 //--------------------------------- VERSION HISTORY -----------------------------------
-$VERSION = "5.02a";
+$VERSION = "6.01";
+//	Added a site-specific note to the self-appointment window
+//$VERSION = "5.02b";
+//	Updated appointment.php, reminders.php, viewtrace.php
+//$VERSION = "5.02a";
 //	Updated index.php, sitemanage.php, appointment.php, reminders.php, viewtrace.php
 //$VERSION = "5.02";
 //	Updated appointment.php, sitemanage.php, added viewtrace.php
@@ -173,6 +177,7 @@ Configure_Column($SITE_TABLE, "site_message", "TEXT");
 Configure_Column($SITE_TABLE, "site_addedby", "BIGINT");
 Configure_Column($SITE_TABLE, "site_open", "DATE");
 Configure_Column($SITE_TABLE, "site_closed", "DATE");
+Configure_Column($SITE_TABLE, "site_instructions", "TEXT");
 Configure_Column($SITE_TABLE, "site_reminder", "TEXT");
 Configure_Column($SITE_TABLE, "site_lastrem", "TEXT");
 Configure_Column($SITE_TABLE, "site_help", "TEXT");

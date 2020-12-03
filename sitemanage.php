@@ -1,7 +1,11 @@
 <?php
-// ini_set('display_errors', '1');
+ini_set('display_errors', '1');
 
 // ---------------------------- VERSION HISTORY -------------------------------
+// File Version 6.01
+// 	Added textarea for taxpayer self-registering instruction for the site
+// 	Restructured site options into an array
+// 	On Site tab, moved site name and tabs to header so always visible
 // File Version 5.02a
 // 	Apostrophe in site message would not save
 // 	Added a test to assure non-A/Ms could not access
@@ -129,6 +133,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 		$SiteClosed =   htmlspecialchars(stripslashes(trim($_POST["SiteClosed"])));
 		$SiteMessage =  htmlspecialchars(stripslashes(trim($_POST["SiteMessage"])));
 		$SiteReminder = htmlspecialchars(stripslashes(trim($_POST["SiteReminder"])));
+		$SiteInstructions =              stripslashes(trim($_POST["SiteInstructions"]));
 		$SiteLastRem =  htmlspecialchars(stripslashes(trim($_POST["SiteLastRem"])));
 		$UserCurrent =  htmlspecialchars(stripslashes(trim($_POST["UserCurrent"])));
 		$UserFirst =    htmlspecialchars(stripslashes(trim($_POST["UserFirst"])));
@@ -191,6 +196,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 			$SiteMessage = ($SiteMessage) ? $SiteMessage : $ConfirmMessage;
 			$query .= ", `site_message` = '$SiteMessage'";
 			$query .= ", `site_reminder` = '$SiteReminder'";
+			$query .= ", `site_instructions` = '$SiteInstructions'";
 			$query .= ", `site_lastrem` = '$SiteLastRem'";
 			$query .= ", `site_open` = '$SiteOpen'";
 			$query .= ", `site_closed` = '$SiteClosed'";
@@ -213,7 +219,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 			}
 			else {
 				$Errormessage .= "Could not add $Site1Name. Try it again.";
-				error_log("MANAGE: Query=$SaveQuery");
+				if ($_SESSION["TRACE"]) error_log("MANAGE: $Errormessage, Query=$SaveQuery");
 			}
 			break;
 
@@ -334,6 +340,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 			$query .= ", `site_10dig` = '$Site10dig'";
 			$query .= ", `site_message` = '$SiteMessage'";
 			$query .= ", `site_reminder` = '$SiteReminder'";
+			$query .= ", `site_instructions` = '$SiteInstructions'";
 			$query .= ", `site_lastrem` = '$SiteLastRem'";
 			$query .= " WHERE `site_index` = $SiteCurrent";
 			mysqli_query($dbcon, $query);
@@ -543,6 +550,7 @@ while ($row = mysqli_fetch_array($locs)) {
 	$NewMessage = htmlspecialchars_decode($row["site_message"]);
 	$NewReminder = htmlspecialchars_decode($row["site_reminder"]);
 	$NewLastRem = htmlspecialchars_decode($row["site_lastrem"]);
+	$NewInstructions = $row["site_instructions"];
 
 	if ($SiteUserHome < 1) $SiteUserHome = $NewIndex;
 	$SiteCurrent = $SiteUserHome;
@@ -565,6 +573,7 @@ while ($row = mysqli_fetch_array($locs)) {
 		$ThisMessage = $NewMessage;
 		$ThisReminder = $NewReminder;
 		$ThisLastRem = $NewLastRem;
+		$ThisInstructions = $NewInstructions;
 		$ThisSiteOptions = $ThisInternet; // start of option list is internet option
 	}
 
@@ -664,8 +673,11 @@ while ($row = mysqli_fetch_array($usrs)) {
 	$UPhone[$j] = $NewPhone;
 	$UEmail[$j] = $LastEmail = $NewEmail;
 	$ULogin[$j] = htmlspecialchars_decode($row["user_lastlogin"]);
-	$UDate[$j] = +substr($ULogin[$j],5,2) . "/" . +substr($ULogin[$j],0,4);
-	if ($UDate[$j] == "0/0") $UDate[$j] = "?";
+	$UMonth = +substr($ULogin[$j],5,2);
+	if ($UMonth < 10) $UMonth = "&nbsp;&nbsp;" . $UMonth;
+	$UDate[$j] = ($UMonth == "&nbsp;&sbsp;0") ? "?" : ($UMonth . "/" . substr($ULogin[$j],0,4));
+	//$UDate[$j] = substr($ULogin[$j],5,2) . "/" . substr($ULogin[$j],0,4);
+	//if ($UDate[$j] == "0/0") $UDate[$j] = "?";
 	$UFlag[$j] = "";
 	$UOptions[$j] = $NewOptions;
 	$OldIndex = $NewIndex;
@@ -1271,7 +1283,11 @@ function Show_Search() {
 
 	var Errormessage = "";
 	var Usermessage = "";
-	var Site_Option_List = [];
+	var old_sitedata = [];
+	var new_sitedata = [];
+	var old_systemdata = [];
+	var old_userdata = [];
+	var new_userdata = [];
 <?php
 	global $DEBUG;
 	if ($DEBUG) echo "\tvar DEBUG = $DEBUG;\n";
@@ -1284,7 +1300,7 @@ function Show_Search() {
 	global $SiteIndexList;
 	echo "	var SiteIndex = [" . $SiteIndexList . "];\n";
 	global $ThisSiteOptions;
-	echo "	var new_site_options = old_site_options = '" . $ThisSiteOptions . "';\n";
+	echo "	var original_site_options = '" . $ThisSiteOptions . "';\n";
 	global $ThisUserOptions;
 	echo "	var new_user_options = old_user_options = '" . $ThisUserOptions . "';\n";
 	global $Administrators;
@@ -1307,21 +1323,6 @@ function Show_Search() {
 	echo "	var SFlag = '$SFlag';\n";
 ?>
 	var ALL_OPTIONS = VIEW_CB | ADD_CB | VIEW_APP | ADD_APP | USE_RES;
-	var new_address = "";
-	var old_address = "";
-	var new_contact = "";
-	var old_contact = "";
-	var new_sumres = "";
-	var old_sumres = "";
-	var new_10dig = "";
-	var old_10dig = "";
-	var new_reminder = "";
-	var old_reminder = "";
-	var new_lastrem = "";
-	var old_lastrem = "";
-	var old_site = "";
-	var old_systemdata = [];
-	var new_systemdata = [];
 	var initialization_flag = true;
 	var system_change_flag = false;
 	var selected_address = [];
@@ -1330,12 +1331,7 @@ function Show_Search() {
 	var user_change_flag = false;
 	var user_role_change_flag = false;
 	var user_add_flag = false;
-	var old_userdata = [];
-	var new_userdata = [];
 	var new_user_role = "S";
-	var old_message = "";
-	var old_site_open = "";
-	var old_site_closed = "";
 	var checkboxYes = "";
 	var checkboxNo = "";
 	var AFlag = "";
@@ -1346,20 +1342,24 @@ function Show_Search() {
 	function Initialize() {
 	//===========================================================================================
 		// Save current site information
-		old_site = site_current_name.value;
-		site_current_name.disabled = (site_current_name.value === "Unassigned") ? true : false;
-		old_address = Build_Site_Address();
-		old_contact = site_contact.value;
-		old_sumres = (site_sumres.checked) ? "checked" : "";
-		old_10dig = (site_10dig.checked) ? "checked" : "";
-		new_site_options = old_site_options;
+		old_sitedata["sitename"] = site_current_name.value;
+		Build_Site_Address(); // creates new_sitedata["address"]
+		old_sitedata["address"] = new_sitedata["address"];
+		old_sitedata["contact"] = site_contact.value;
+		// sumres and 10dig expect the word "checked" in the database
+		old_sitedata["sumres"] = (site_sumres.checked) ? "checked" : "" ;
+		old_sitedata["10dig"] = (site_10dig.checked) ? "checked" : "" ;
+		// reminderoption can use T/F since it's not passed to the database
+		old_sitedata["reminderoption"] = site_reminder_option.checked ;
+		old_sitedata["reminder"] = site_reminder.value;
+		old_sitedata["lastrem"] = site_lastrem.value;
+		old_sitedata["message"] = site_message.value;
+		old_sitedata["options"] = original_site_options;
+		old_sitedata["open"] = site_open.value;
+		old_sitedata["closed"] = site_closed.value;
+		old_sitedata["instructions"] = site_instructions.value;
 		Build_User_Data(); // verifies and fills new_userdata array
 		old_userdata = new_userdata;
-		old_message = site_message.value;
-		old_reminder = site_reminder.value;
-		old_lastrem = site_lastrem.value;
-		old_site_open = site_open.value;
-		old_site_closed = site_closed.value;
 		Display_System_Data();
 		old_systemdata["SystemGreeting"] = system_greeting.value;
 		old_systemdata["SystemNotice"] = system_notice.value;
@@ -1374,9 +1374,15 @@ function Show_Search() {
 		// set up display
 		Restore_System_Data();
 		Restore_Site_Address();
-		Restore_Site_Message();
+		Restore_Site_Email();
 		Restore_Site_Options();
 		Restore_User_Data();
+
+		// Initialize new site data and show the current tab
+		for (j in old_sitedata) new_sitedata[j] = old_sitedata[j];
+		system_change_flag = false;
+		site_change_flag = false;
+		user_change_flag = false;
 		ShowPage(SiteForm.SiteView.value);
 
 
@@ -1395,42 +1401,49 @@ function Show_Search() {
 	//===========================================================================================
 	function ShowPage(pageid) {
 	//===========================================================================================
+		// Do not allow display of Site or Schedulers tabs
+		if (old_sitedata["sitename"] === "Unassigned") {
+			menuTabSite.style.textDecoration = "line-through";
+			menuTabUsers.style.textDecoration = "line-through";
+			<?php global $isAdministrator;
+			if (! $isAdministrator) echo 'pageid = "Taxpayers";';
+			?>
+		}
+
 		// Make sure there are no changes pending before changing pages
 		Check_For_Changes("before going to the new tab.");
 
 		switch (pageid) {
 			case "Schedulers":
-				site_add.style.display = "none";
 				site_page.style.display = "none";
 				user_page.style.display = "block";
 				internet_page.style.display = "none";
 				system_page.style.display = "none";
-				site_selections.style.display = "block"
+				system_selected.style.display = "none";
+				site_selections.style.display = "block";
 				menuTabSys.style.borderBottom = "1px solid black";
 				menuTabSite.style.borderBottom = "1px solid black";
 				menuTabUsers.style.borderBottom = "none";
 				menuTabTPs.style.borderBottom = "1px solid black";
-				// user_information.style.display = "none"; // don't close it if open
 				break;
 			case "Taxpayers":
-				site_add.style.display = "none";
 				site_page.style.display = "none";
 				user_page.style.display = "none";
 				internet_page.style.display = "block";
 				system_page.style.display = "none";
+				system_selected.style.display = "none";
 				site_selections.style.display = "block"
 				menuTabSys.style.borderBottom = "1px solid black";
 				menuTabSite.style.borderBottom = "1px solid black";
 				menuTabUsers.style.borderBottom = "1px solid black";
 				menuTabTPs.style.borderBottom = "none";
-				// user_information.style.display = "none"; // don't close it if open
 				break;
 			case "System":
-				site_add.style.display = "none";
 				site_page.style.display = "none";
 				user_page.style.display = "none";
 				internet_page.style.display = "none";
 				system_page.style.display = "block";
+				system_selected.style.display = "block";
 				site_selections.style.display = "none"
 				menuTabSys.style.borderBottom = "none";
 				menuTabSite.style.borderBottom = "1px solid black";
@@ -1439,12 +1452,12 @@ function Show_Search() {
 				user_information.style.display = "none";
 				break;
 			default: // "Site" or none
-				site_add.style.display = "inline";
 				site_page.style.display = "block";
 				user_page.style.display = "none";
 				internet_page.style.display = "none";
 				system_page.style.display = "none";
-				site_selections.style.display = "block"
+				system_selected.style.display = "none";
+				site_selections.style.display = "block";
 				menuTabSys.style.borderBottom = "1px solid black";
 				menuTabUsers.style.borderBottom = "1px solid black";
 				menuTabSite.style.borderBottom = "none";
@@ -1453,7 +1466,9 @@ function Show_Search() {
 				pageid = "Site";
 				break;
 		}
-		SiteForm.SiteView.value = pageid;
+
+		// if site is Unassigned, change so that a new site selection will go to Site tab
+		SiteForm.SiteView.value = (old_sitedata["sitename"] === "Unassigned") ? "Site" : pageid ;
 	}
 
 	//===========================================================================================
@@ -1519,37 +1534,35 @@ function Show_Search() {
 	//	Also used to send to the database as a site information string
 	//===========================================================================================
 		// build an address string from the input fields
-		new_address = "";
+		new_sitedata["address"] = "";
 
 		// Street address
-		//site_address.style.backgroundColor = "transparent";
 		if ((! initialization_flag) && (site_address.value != "") && (site_address.value.match(/^[\w ]+$/) == null)) {
 			alert("Street address is not in the correct format");
-			//site_address.style.backgroundColor = "hotpink";
 			return;
 		}
-		new_address += site_address.value;
+		new_sitedata["address"] += site_address.value;
 
 		// City ----------------------
 		if ((! initialization_flag) && (site_city.value != "") && (site_city.value.match(/^[\w ]+$/) == null)) {
 			alert("City is not in the correct format");
 			return;
 		}
-		new_address += "|" + site_city.value;
+		new_sitedata["address"] += "|" + site_city.value;
 
 		// State ----------------------
 		if ((! initialization_flag) && (site_state.value != "") && (site_state.value.match(/^[A-Za-z]{2}$/) == null)) {
 			alert("State is not in the correct format");
 			return;
 		}
-		new_address += "|" + site_state.value.toUpperCase();
+		new_sitedata["address"] += "|" + site_state.value.toUpperCase();
 
 		// Zip Code ----------------------
 		if ((! initialization_flag) && (site_zip.value != "") && (site_zip.value.match(/^\d{5}(-\d{4})?$/) == null)) {
 			alert("Zip code is not in the correct format");
 			return;
 		}
-		new_address += "|" + site_zip.value;
+		new_sitedata["address"] += "|" + site_zip.value;
 
 		// Phone ----------------------
 		if (! initialization_flag) {
@@ -1561,7 +1574,7 @@ function Show_Search() {
 				}
 			site_phone.value = results[1];
 		}
-		new_address += "|" + site_phone.value;
+		new_sitedata["address"] += "|" + site_phone.value;
 
 		// Email ----------------------
 		if (! initialization_flag) {
@@ -1573,32 +1586,35 @@ function Show_Search() {
 			if (results[0] > 1) return; // no email is OK
 			site_email.value = results[1];
 		}
-		new_address += "|" + site_email.value;
+		new_sitedata["address"] += "|" + site_email.value;
 
 		// Website ----------------------
 		if ((! initialization_flag) && (site_website.value != "") && (site_website.value.match(/^http[s]?:\/\/[\w\.\/\-]+$/) == null)) {
 			alert("Website address is not in the correct format");
 			return;
 		}
-		new_address += "|" + site_website.value;
+		new_sitedata["address"] += "|" + site_website.value;
 
 		// Contact -------------------
-		new_contact = site_contact.value;
+		new_sitedata["contact"] = site_contact.value;
 
 		// Site Options ----------------
-		new_sumres = (site_sumres.checked) ? "checked" : "";
-		new_10dig = (site_10dig.checked) ? "checked" : "";
-		new_reminder = site_reminder.value;
-		new_lastrem = site_lastrem.value;
+		new_sitedata["sumres"] = (site_sumres.checked) ? "checked" : "";
+		new_sitedata["10dig"] = (site_10dig.checked) ? "checked" : "";
+		new_sitedata["reminder"] = site_reminder.value;
+		new_sitedata["lastrem"] = site_lastrem.value;
 
 		// Open and Closed dates -------------------
 		if ((site_closed.value == "") && (site_open.value < TodayDate)) site_open.value = TodayDate;
 		if (site_closed.value < site_open.value) site_closed.value = site_open.value;
-		new_site_open = site_open.value;
-		new_site_closed = site_closed.value;
+		new_sitedata["open"] = site_open.value;
+		new_sitedata["closed"] = site_closed.value;
+
+		// Internet site instructions -------------------
+		new_sitedata["instructions"] = site_instructions.value;
 
 		Display_Site_Buttons();
-		return (new_address);
+		return (new_sitedata["address"]);
 	}
 
 	//===========================================================================================
@@ -1692,13 +1708,13 @@ function Show_Search() {
 		site_phone.value = "";
 		site_email.value = "";
 		site_website.value = "";
-		new_address = ""; // clear saved address
+		new_sitedata["address"] = ""; // clear saved address
+		site_instructions.value = "";
 		site_clients.checked = false;
 		site_clients_cblistonly.checked = false;
 		site_clients_options.style.display = "none";
 		site_clients_inet.style.border = "";
-		Site_Option_List = []; // clear this site's options
-		new_site_options = "";
+		new_sitedata["options"] = "";
 		site_add_flag = true;
 
 		Display_Site_Buttons();
@@ -1709,9 +1725,9 @@ function Show_Search() {
 	function Restore_Site_Address() {
 	//===========================================================================================
 		// Get address information for the currently selected site
-		selected_address = old_address.split("|");
+		selected_address = old_sitedata["address"].split("|");
 
-			site_current_name.value = old_site;
+			site_current_name.value = old_sitedata["sitename"];
 			site_add_flag = false;
 			site_change_flag = false;
 			
@@ -1725,6 +1741,8 @@ function Show_Search() {
 				case 2: site_city.value = selected_address[1];
 				case 1: site_address.value = selected_address[0];
 			}
+
+		site_contact.value = old_sitedata["contact"];
 		
 		Display_Site_Buttons();
 	}
@@ -1741,7 +1759,7 @@ function Show_Search() {
 				return;
 			}
 			site_email_options.style.display =
-			view_message_button.style.display = "inline";
+			view_m_button.style.display = "inline";
 			var msg = site_message.value;
 			if (msg.substr(0, 4) == "NONE") msg = msg.substr(4);
 			site_message.value = (msg) ? msg : "";
@@ -1750,7 +1768,7 @@ function Show_Search() {
 		}
 		else {
 			site_email_options.style.display =
-			view_message_button.style.display = "none"; 
+			view_m_button.style.display = "none"; 
 			var msg = site_message.value;
 			if (msg.substr(0, 4) != "NONE") msg = "NONE" + site_message.value;
 			site_message.value = msg;
@@ -1772,13 +1790,21 @@ function Show_Search() {
 	}
 
 	//===========================================================================================
-	function Restore_Site_Message() {
+	function Restore_Site_Email() {
 	//===========================================================================================
-		site_message.value = old_message;
-		site_sendemail.checked = (old_message.substr(0, 4) != "NONE");
+		//Restore the message
+		site_message.value = old_sitedata["message"]
+		site_sendemail.checked = (old_sitedata["message"].substr(0, 4) != "NONE");
 
+		// Restore email options
 		site_email_options.style.display =
-		view_message_button.style.display = (site_sendemail.checked) ? "inline" : "none"; 
+		view_m_button.style.display = (site_sendemail.checked) ? "inline" : "none"; 
+		site_email_optbox.style.border = (site_sendemail.checked) ? "1px solid grey" : "";
+
+		// Restore reminders
+		site_reminder_option.checked = old_sitedata["reminderoption"];
+		site_reminder.value = old_sitedata["reminder"];
+		site_lastrem.value = old_sitedata["lastrem"];
 	}
 
 	//===========================================================================================
@@ -1788,46 +1814,82 @@ function Show_Search() {
 		var selected_options = [];
 		var site_clients_inetopts = [0,0];
 
-		selected_options = old_site_options.split("|");
+		selected_options = old_sitedata["options"].split("|");
 		site_clients_inetopts = selected_options[0].split(":");
 		site_clients_limit.value = (site_clients_inetopts[1]) ? site_clients_inetopts[1] : 1;
-		Site_Option_List = []; // clear any previous changes
 
 		// show which internet boxes should be checked and/or disabled
 		switch (site_clients_inetopts[0]) {
 			case "C": // Callback list only
 				site_clients_cblistonly.checked = true;
+				site_clients_cblistonly.disabled = false;
+				site_clients_restrict.checked = false;
 				site_clients_restrict.disabled = true;
 				site_clients.checked = true;
 				site_clients_limit.value = 0;
 				break;
 			case "R": // Restrict reservations if callback list big
 				site_clients_restrict.checked = true;
+				site_clients_restrict.disabled = false;
+				site_clients_cblistonly.checked = false;
 				site_clients_cblistonly.disabled = true;
 				site_clients.checked = true;
 				break;
 			case "S": // Schedule reservation even if callback list big
 				site_clients.checked = true;
+				site_clients_restrict.checked = false;
+				site_clients_restrict.disabled = false;
+				site_clients_cblistonly.checked = false;
+				site_clients_cblistonly.disabled = false;
 				break;
 			default: // No internet scheduling allowed
+				site_clients_restrict.checked = false;
 				site_clients_cblistonly.checked = false;
 				site_clients.checked = false;
 		}
+
+		// clear all site permission boxes
+		for (j = 0; j < SiteIndex.length; j++) {
+			jsite = SiteIndex[j];
+			if (jsite < 2) continue; // skip undefined
+			ossptr = document.getElementById("OSS_" + jsite);
+			ossptr.innerHTML = "";
+			site_others.checked = false;
+		}
+		// restore original site permission boxes
+		for (j = 1; j < (selected_options.length); j++) {
+			jsite = selected_options[j].split(":")[0];
+			ossptr = document.getElementById("OSS_" + jsite);
+			ossptr.innerHTML = checkboxYes;
+			site_others.checked = true;
+		}
+
+		// Restore internet options
+		site_open.value = old_sitedata["open"];
+		site_closed.value = old_sitedata["closed"];
+		// For sumres and 10dig, the checked text is used by PHP, don't save as T/F
+		site_sumres.checked = (old_sitedata["sumres"]) ? "checked" : "" ;
+		site_10dig.checked = (old_sitedata["10dig"]) ? "checked" : "" ;
+		site_instructions.value = old_sitedata["instructions"];
 		site_clients_options.style.display = (site_clients.checked) ? "inline" : "none";
-		site_clients_inet.style.border = (site_clients.checked) ? "1px solid grey" : "";
 		if (! site_clients.checked) site_clients_cblistonly.checked = false;
 
-		site_email_optbox.style.border = (site_sendemail.checked) ? "1px solid grey" : "";
+		// Add borders to active option areas
+		site_clients_inet.style.border = (site_clients.checked) ? "1px solid grey" : "";
+		view_i_button.style.display = (site_clients.checked) ? "inline" : "none"; 
 		site_others_access.style.border = (site_others.checked) ? "1px solid grey" : "";
 
 		Display_Site_Buttons();
 	}
-	
+
 	//===========================================================================================
 	function Change_Other_Sites(whichbox) {
 	// whichbox is the id of the box that was changed
+	// build the site option string:
+	// null or C or R or S ":" # appts "|" string of site IDs ":47" separated by "|"
 	//===========================================================================================
 		// Get address information for the currently selected site
+		// Toggle the checkmark
 		if (whichbox) {
 			ossptr = document.getElementById(whichbox);
 			if (ossptr.innerHTML == "") {
@@ -1837,6 +1899,7 @@ function Show_Search() {
 		}
 
 		// assure self-schedule option boxes are consistant
+		view_i_button.style.display = (site_clients.checked) ? "inline" : "none"; 
 		site_clients_options.style.display = (site_clients.checked) ? "inline" : "none";
 		site_clients_inet.style.border = (site_clients.checked) ? "1px solid grey" : "";
 		site_others_access.style.border = (site_others.checked) ? "1px solid grey" : "";
@@ -1852,12 +1915,11 @@ function Show_Search() {
 		else if (site_clients_limit.value == 0) site_clients_limit.value = 1;
 
 		// build an option string from the input fields
-		if (site_clients_cblistonly.checked) new_site_options = "C";
-		else if (site_clients_restrict.checked) new_site_options = "R";
-		else if (site_clients.checked) new_site_options = "S";
-		else new_site_options = "";
-		if (new_site_options !== "") new_site_options += ":" + site_clients_limit.value;
-
+		new_sitedata["options"] = "";
+		if (site_clients_cblistonly.checked) new_sitedata["options"] = "C";
+		else if (site_clients_restrict.checked) new_sitedata["options"] = "R";
+		else if (site_clients.checked) new_sitedata["options"] = "S";
+		if (new_sitedata["options"] !== "") new_sitedata["options"] += ":" + site_clients_limit.value;
 
 		if (site_others.checked) { // build the rest of the option string
 
@@ -1866,9 +1928,11 @@ function Show_Search() {
 				if (jsite < 2) continue; // skip undefined
 	
 				ossptr = document.getElementById("OSS_" + jsite);
-				code = (ossptr.innerHTML == checkboxYes) ? ALL_OPTIONS : 0;
+				siteid = (ossptr.innerHTML == checkboxYes) ? ALL_OPTIONS : 0;
 
-				if (code) new_site_options += "|" + jsite + ":" + code;
+				if (siteid) {
+					new_sitedata["options"] += "|" + jsite + ":" + siteid;
+				}
 			}
 		}
 
@@ -1881,38 +1945,42 @@ function Show_Search() {
 	//===========================================================================================
 		site_change_flag = false;
 
-		// Ignore changes if we are adding a new site
-		if (! site_add_flag) {
+		// Ignore changes if we are adding a new site or during initialization
+		if ((! site_add_flag) && (! initialization_flag)) {
+
 			// Check for a change in the site name
-			if (site_current_name.value != old_site) site_change_flag = true; 
+			if (site_current_name.value != old_sitedata["sitename"]) site_change_flag = true; 
 
 			// Check for a change in the address data
-			if ((old_address != "") && (new_address != old_address)) site_change_flag = true; 
+			if ((old_sitedata["address"] != "") && (new_sitedata["address"] != old_sitedata["address"])) site_change_flag = true; 
 
 			// Check for a change in the contact name
-			if (new_contact != old_contact) site_change_flag = true; 
+			if (new_sitedata["contact"] != old_sitedata["contact"]) site_change_flag = true; 
 
 			// Check for a change in site options
-			if (new_sumres != old_sumres) site_change_flag = true;
-			if (new_10dig != old_10dig) site_change_flag = true;
-			if (new_reminder != old_reminder) site_change_flag = true;
-			if (new_lastrem != old_lastrem) site_change_flag = true;
+			if (new_sitedata["sumres"] != old_sitedata["sumres"]) site_change_flag = true;
+			if (new_sitedata["10dig"] != old_sitedata["10dig"]) site_change_flag = true;
+			if (new_sitedata["reminder"] != old_sitedata["reminder"]) site_change_flag = true;
+			if (new_sitedata["lastrem"] != old_sitedata["lastrem"]) site_change_flag = true;
 
 			// Check for a change in the access option data
-			if (new_site_options != old_site_options) site_change_flag = true; 
+			if (new_sitedata["options"] != old_sitedata["options"]) site_change_flag = true; 
 
 			// Check for a change in the email message
-			if (site_message.value != old_message) site_change_flag = true; 
+			if (site_message.value != old_sitedata["message"]) site_change_flag = true; 
 
 			// Check for a change in the site internet access dates
-			if (site_open.value != old_site_open) site_change_flag = true; 
-			if (site_closed.value != old_site_closed) site_change_flag = true; 
+			if (site_open.value != old_sitedata["open"]) site_change_flag = true; 
+			if (site_closed.value != old_sitedata["closed"]) site_change_flag = true; 
+
+			// Check for a change in the site instructions
+			if (site_instructions.value != old_sitedata["instructions"]) site_change_flag = true;
 		}
 
 		// Determine what buttons to show
 		var isUnassigned = (SiteForm.SiteCurrent.value == 1);
 		if (site_add_flag) {
-			site_selections.style.visibility = "hidden"
+			site_selections.style.visibility = "hidden";
 			site_new.style.display = "block";
 			site_current.style.display = "none";
 			site_address_block.style.display = "block";
@@ -1923,7 +1991,7 @@ function Show_Search() {
 
 		}
 		else if (site_change_flag) {
-			site_selections.style.visibility = "visible"
+			site_selections.style.visibility = "visible";
 			site_new.style.display = "none";
 			site_current.style.display = "inline";
 			site_addit.style.display = "none";
@@ -1946,10 +2014,10 @@ function Show_Search() {
 	}
 
 	//===========================================================================================
-	function View_Message() {
+	function View_Message($how) {
 	// Displays the email message a user would recieve
 	//===========================================================================================
-		vm = site_message.value;
+		vm = site_message.value + " from " + $how;
 		vm = vm.replace(/\[TPNAME\]/g,"Jack & Jill Taxpayer");
 		vm = vm.replace(/\[TIME\]/g,"2:30 am");
 		vmdate = "1/1/" + (+TodayDate.substr(0,4) + 1);
@@ -1964,6 +2032,28 @@ function Show_Search() {
 		vm = vm.replace(/\[PHONE\]/g,site_phone.value);
 		vm = vm.replace(/\[EMAIL\]/g,site_email.value);
 		vm = vm.replace(/\[WEBSITE\]/g,site_website.value);
+		alert (vm);
+	}
+
+	//===========================================================================================
+	function View_Instructions($how) {
+	// Displays the instructions as presented on the appointment selection screen
+	//===========================================================================================
+		vm = site_instructions.value;
+		//vm = vm.replace(/\[TPNAME\]/g,"Jack & Jill Taxpayer");
+		//vm = vm.replace(/\[TIME\]/g,"2:30 am");
+		//vmdate = "1/1/" + (+TodayDate.substr(0,4) + 1);
+		//vm = vm.replace(/\[DATE\]/g,vmdate);
+		//vm = vm.replace(/\[SITENAME\]/g,site_current_name.value);
+		//vm = vm.replace(/\[STATESITE\]/g,"<?php echo $_SESSION['SystemURL']; ?>");
+		//vm = vm.replace(/\[ADDRESS\]/g,site_address.value);
+		//vm = vm.replace(/\[CONTACT\]/g,site_contact.value);
+		//vm = vm.replace(/\[CITY\]/g,site_city.value);
+		//vm = vm.replace(/\[STATE\]/g,site_state.value);
+		//vm = vm.replace(/\[ZIP\]/g,site_zip.value);
+		//vm = vm.replace(/\[PHONE\]/g,site_phone.value);
+		//vm = vm.replace(/\[EMAIL\]/g,site_email.value);
+		//vm = vm.replace(/\[WEBSITE\]/g,site_website.value);
 		alert (vm);
 	}
 
@@ -2478,16 +2568,17 @@ function Show_Search() {
 				//Check_For_Changes("before adding a new site."); // check done earlier
 				SiteForm.Site1Name.value = site_new_name.value;
 				Build_Site_Address();
-				SiteForm.Site1Address.value = new_address;
-				SiteForm.SiteContact.value = new_contact;
-				SiteForm.SiteSumres.value = new_sumres;
-				SiteForm.Site10dig.value = new_10dig;
+				SiteForm.Site1Address.value = new_sitedata["address"];
+				SiteForm.SiteContact.value = new_sitedata["contact"];
+				SiteForm.SiteSumres.value = new_sitedata["sumres"];
+				SiteForm.Site10dig.value = new_sitedata["10dig"];
 				SiteForm.SiteMessage.value = site_message.value.replace(/\n/g,"%%").replace(/\'/g,"&apos;");
-				SiteForm.SiteReminder.value = new_reminder;
-				SiteForm.SiteLastRem.value = new_lastrem;
-				SiteForm.SiteOptions.value = new_site_options;
-				SiteForm.SiteOpen.value = new_site_open;
-				SiteForm.SiteClosed.value = new_site_closed;
+				SiteForm.SiteReminder.value = new_sitedata["reminder"];
+				SiteForm.SiteLastRem.value = new_sitedata["lastrem"];
+				SiteForm.SiteOptions.value = new_sitedata["options"];
+				SiteForm.SiteOpen.value = new_sitedata["open"];
+				SiteForm.SiteClosed.value = new_sitedata["closed"];
+				SiteForm.SiteInstructions.value = site_instructions.value.trim().replace(/\n/g,"%%").replace(/\'/g,"&apos;");
 				break;
 
 			case "ChangeSite":
@@ -2496,16 +2587,17 @@ function Show_Search() {
 					return;
 				}
 				SiteForm.Site1Name.value = site_current_name.value;
-				SiteForm.Site1Address.value = new_address;
-				SiteForm.SiteContact.value = new_contact;
-				SiteForm.SiteSumres.value = new_sumres;
-				SiteForm.Site10dig.value = new_10dig;
+				SiteForm.Site1Address.value = new_sitedata["address"];
+				SiteForm.SiteContact.value = new_sitedata["contact"];
+				SiteForm.SiteSumres.value = new_sitedata["sumres"];
+				SiteForm.Site10dig.value = new_sitedata["10dig"];
 				SiteForm.SiteMessage.value = site_message.value.replace(/\n/g,"%%").replace(/\'/g,"&apos;");
-				SiteForm.SiteReminder.value = new_reminder;
-				SiteForm.SiteLastRem.value = new_lastrem;
-				SiteForm.SiteOptions.value = new_site_options;
-				SiteForm.SiteOpen.value = new_site_open;
-				SiteForm.SiteClosed.value = new_site_closed;
+				SiteForm.SiteReminder.value = new_sitedata["reminder"];
+				SiteForm.SiteLastRem.value = new_sitedata["lastrem"];
+				SiteForm.SiteOptions.value = new_sitedata["options"];
+				SiteForm.SiteOpen.value = new_sitedata["open"];
+				SiteForm.SiteClosed.value = new_sitedata["closed"];
+				SiteForm.SiteInstructions.value = site_instructions.value.trim().replace(/\n/g,"%%").replace(/\'/g,"&apos;").trim();
 				break;
 
 			case "SwitchSite":
@@ -2585,7 +2677,7 @@ function Show_Search() {
 						echo "return;\n}\n";
 				};
 				?>
-				message = "OK to totally remove " + old_site + "?\n\n";
+				message = "OK to totally remove " + old_sitedata["sitename"] + "?\n\n";
 				message += "This will also remove all associated people!";
 				if (! confirm (message)) return; // didn't say OK
 				SiteForm.Site1Name.value = site_current_name.value;
@@ -2637,17 +2729,13 @@ function Show_Search() {
 				break;
 
 			case "CancelSite":
+				for (j in old_sitedata) new_sitedata[j] = old_sitedata[j];
 				site_add_flag = false;
 				site_change_flag = false;
-				new_address = old_address;
-				new_contact = old_contact;
-				new_sumres = old_sumres;
-				new_site_options = old_site_options;
-				new_site_open = old_site_open;
-				new_site_closed = old_site_closed;
+				//new_sitedata["options"] = old_sitedata["options"];
 				Restore_Site_Address();
-				Restore_Site_Options(0);
-				Restore_Site_Message();
+				Restore_Site_Email();
+				Restore_Site_Options();
 				return;
 
 			case "CancelUser":
@@ -2820,7 +2908,35 @@ function Test_For_Enter(id, e) {
 	}
 ?>
 		<div class="menuButton" onclick="Action_Request('SignOut');">Sign out</div>
+
 	</div>
+
+	<div id="site_selections" class="safe">
+		<b>Site being managed:</b> <select id="site_name" class="site_name" onchange="Action_Request('SwitchSite');">
+			<?php
+			List_Sites("mine");
+			?>
+			</select>
+	</div>
+	<div id="system_selected" class="safe">
+		<b>System options being managed</b>
+	</div>
+
+		<br />
+
+		<table id="menuTabDiv">
+			<tr>
+				<?php
+					$class = ($isAdministrator) ? "menuTabAdmin" : "menuTab";
+					echo "<td id=\"menuTabSys\" class=\"$class\"";
+						if (! $isAdministrator) echo " style=\"display: none;\"";
+						echo " onclick=\"ShowPage('System');\">System Options</td>\n";
+					echo "<td id=\"menuTabSite\"  class=\"$class\" onclick=\"ShowPage('Site');\">Site Options</td>\n";
+					echo "<td id=\"menuTabUsers\" class=\"$class\" onclick=\"ShowPage('Schedulers');\">Schedulers</td>\n";
+					echo "<td id=\"menuTabTPs\"   class=\"$class\" onclick=\"ShowPage('Taxpayers');\">Taxpayers</td>\n";
+				?>
+		</table>
+
 
 <?php	
 //	global $change_history;
@@ -2844,29 +2960,7 @@ function Test_For_Enter(id, e) {
 
 <div id="access_admin">
 
-	<div id="site_selections" class="safe">
-		<b>Site being managed:</b> <select id="site_name" class="site_name" onchange="Action_Request('SwitchSite');">
-			<?php
-			List_Sites("mine");
-			?>
-			</select>
-	</div>
-
-	<br />
-
-	<table id="menuTabDiv">
-		<tr>
-			<?php
-				$class = ($isAdministrator) ? "menuTabAdmin" : "menuTab";
-				echo "<td id=\"menuTabSys\" class=\"$class\"";
-					if (! $isAdministrator) echo " style=\"display: none;\"";
-					echo " onclick=\"ShowPage('System');\">System Options</td>\n";
-				echo "<td id=\"menuTabSite\"  class=\"$class\" onclick=\"ShowPage('Site');\">Site Options</td>\n";
-				echo "<td id=\"menuTabUsers\" class=\"$class\" onclick=\"ShowPage('Schedulers');\">Schedulers</td>\n";
-				echo "<td id=\"menuTabTPs\"   class=\"$class\" onclick=\"ShowPage('Taxpayers');\">Taxpayers</td>\n";
-			?>
-	</table>
-
+<div id="admin_pages">
 
 <!-- ================================= System Page ======================================== -->
 <div id="system_page" style="display: none;">
@@ -2945,12 +3039,7 @@ function Test_For_Enter(id, e) {
 
 	<div id="site_options" class="safe">
 
-		<?php global $SiteCurrent;
-		if ($SiteCurrent > 1) {
-			echo "<button id='site_add' onclick='Add_New_Site()'>Add a new site</button>";
-		}
-		else echo "<span id='site_add'></span>"; // dummy to resolve undefined id
-		?>
+		<button id='site_add' onclick='Add_New_Site()'>Add a new site</button>
 
 		<div id="site_new">
 			<table id="site_new_table" class="address_table">
@@ -2994,7 +3083,9 @@ function Test_For_Enter(id, e) {
 					value="<?php global $ThisAddress; echo $ThisAddress[6];?>" /></td>
 					<td>[WEBSITE]</td></tr>
 				<tr><td>Email messages:
-						<br /><button id="view_message_button" onclick="View_Message()">&nbsp;View&nbsp;</button></td>
+					<span id="view_m_button"
+						<br /><br /><br /><button id="view_message_button" onclick="View_Message()">&nbsp;View&nbsp;</button></span>
+					</td>
 					<td colspan="2" id="site_email_optbox" onchange="Change_Site_Message();">
 						<input id="site_sendemail" type="checkbox" />
 						Send confirmation email if taxpayer has an email.
@@ -3027,7 +3118,10 @@ function Test_For_Enter(id, e) {
 						Allow scheduling of reserved slots in Summary View (empty slots are always chosen first)
 						<br /><input id="site_10dig" type="checkbox" <?php global $This10dig; echo $This10dig; ?> />
 						Require 10-digit phone numbers (with optional toll prefix)</td></tr>
-				<tr><td>Internet access:</td>
+				<tr><td>Internet access:
+					<span id="view_i_button"
+						<br /><br /><br /><br /><br /><br /><br /><br /><br /><br /><button id="view_instructions_button" onclick="View_Instructions()">&nbsp;View&nbsp;</button>
+					</span> </td>
 					<td colspan="2" id="site_clients_inet" onchange="Change_Other_Sites('');">
 						<input id="site_clients" type="checkbox" /> Allow internet taxpayers to make their own appointment.
 						<span id="site_clients_options">
@@ -3043,6 +3137,16 @@ function Test_For_Enter(id, e) {
 							<tr><td style="text-align: right; width: 0;">Internet&nbsp;access&nbsp;open:&nbsp;<br />through:&nbsp;</td>
 							<td><input id="site_open" type="date" value="<?php global $ThisOpen; echo $ThisOpen;?>" />
 							<br /><input id="site_closed" type="date" value="<?php global $ThisClosed; echo $ThisClosed;?>" ></td></tr>
+						</table>
+						<table style="width: calc(100%-1em); margin-left: 1em;">
+							<tr><td colspan="2">Additional instructions for the taxpayer for this site:</td></tr>
+							<tr>
+							<!-- do not split the folowing line -->
+							<td><textarea style="width:30em; height:12em;" id="site_instructions"><?php global $ThisInstructions; $ThisInstructions = str_replace("%%","\n",$ThisInstructions); $ThisInstructions = str_replace("&apos;","'",$ThisInstructions); echo $ThisInstructions;?></textarea></td>
+							<td>This message will be displayed after the general instructions on the taxpayer
+								self-appointment page.
+								<br /><br />Shortcodes are not supported in this message.
+								<br /><br />Leave blank to omit the message.</td></tr>
 						</table>
 						</span></td></tr>
 				<tr><td>Other site access:</td>
@@ -3091,7 +3195,7 @@ function Test_For_Enter(id, e) {
 			<table id="user_list_table">
 				<tr>
 				<th rowspan="2">Name <?php global $MFlag; echo "<br />(<span id='optM'>$MFlag</span>&nbsp;=&nbsp;Home&nbsp;Site&nbsp;Appt&nbsp;Manager, <span id='optA'>$AFlag</span>&nbsp;=&nbsp;Administrator)"; ?></th>
-					<th rowspan="2">Role</th>
+					<th rowspan="2">Role<br />at this site</th>
 					<th colspan="2">Callback List</th>
 					<th colspan="3">Appointments</th></tr>
 				<tr>
@@ -3245,6 +3349,7 @@ function Test_For_Enter(id, e) {
 
 </div> <!-- user_information -->
 
+</div> <!-- admin_pages -->
 
 <div id="SiteDiv" style="display:none;">
 <form id="SiteForm" method="post" action="<?php echo htmlspecialchars($_SERVER['PHP_SELF']);?>">
@@ -3262,6 +3367,7 @@ function Test_For_Enter(id, e) {
 	<br />Message: <input id="SiteMessage" name="SiteMessage" />
 	<br />Reminder: <input id="SiteReminder" name="SiteReminder" />
 	<br />LastRem: <input id="SiteLastRem" name="SiteLastRem" />
+	<br />Instructions: <input id="SiteInstructions" name="SiteInstructions" />
 	<br />UserCurrent: <input id="UserCurrent" name="UserCurrent" value="<?php global $UserPreferred; echo $UserPreferred;?>" />
 	<br />UserF: <input id="UserFirst" name="UserFirst" />
 	<br />UserL: <input id="UserLast" name="UserLast" />

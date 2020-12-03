@@ -1,4 +1,10 @@
 <?PHP
+//Version 5.02d
+//	Fix 5.02c
+//Version 5.02c
+//	Increment the unless-sent days by 1
+//Version 5.02b
+//	Change email "From:" to send from no-email
 //Version 5.02a
 //	Fixed apostrophe problem in site appointment message
 //Version 5.01
@@ -12,6 +18,7 @@ $Errormessage = "";
 // get site information
 $query = "SELECT * FROM $SITE_TABLE";
 $sites = mysqli_query($dbcon, $query);
+//$count = mysqli_num_rows($sites);
 while($row = mysqli_fetch_array($sites)) {
 	$siteIndex = "S" . $row["site_index"];
 	$siteName[$siteIndex] = $row["site_name"]; 
@@ -27,7 +34,7 @@ while($row = mysqli_fetch_array($sites)) {
 		$sd = strtotime("+" . $row["site_reminder"] . " days", time());
 	}
 	$siteReminder[$siteIndex] = $sd;
-	$siteLastRem[$siteIndex] = $row["site_lastrem"];
+	$siteLastRem[$siteIndex] = intval($row["site_lastrem"]) + 1;
 
 	$sa = $row["site_address"]; 
 	$sa = explode("|", $row["site_address"]);
@@ -44,12 +51,15 @@ while($row = mysqli_fetch_array($sites)) {
 $query = "SELECT * FROM $APPT_TABLE";
 $appointments = mysqli_query($dbcon, $query);
 while($row = mysqli_fetch_array($appointments)) {
+	// See if email can be sent to this person
 	$apptEmail = $row["appt_email"];
 	if ($apptEmail == "") continue; // no email to send to
 	$apptDate = $row["appt_date"];
 	if ($apptDate == $NullDate) continue; // on callback or deleted list
 	if ($apptDate < $TodayDate) continue; // skip if earlier than today
 	$apptDate = strtotime($apptDate);
+
+	// See if the site is set up to send the email
 	$siteIndex = "S" . $row["appt_location"];
 	$graceDate = strtotime("-" . $siteLastRem[$siteIndex] . " days");
 	if ($siteMessage[$siteIndex] == "") continue; // site messaging not enabled
@@ -61,7 +71,7 @@ while($row = mysqli_fetch_array($appointments)) {
 	// OK to send email
 	$apptStatus = $row["appt_status"];
 	$apptIndex = $row["appt_no"];
-	$apptDate = date("D, M j", $apptDate);
+	$apptDate = date("D, M j Y", $apptDate);
 	$apptTime = date("g:i a", strtotime($row["appt_time"]));
 	$apptName = str_replace("!", "'", htmlspecialchars_decode($row["appt_name"]));
 	$apptName = str_replace("&amp;", "&", $apptName);
@@ -69,14 +79,11 @@ while($row = mysqli_fetch_array($appointments)) {
 	$to = $apptEmail;
 
 	$from = (isset($siteEmail[$siteIndex]) AND ($siteEmail[$siteIndex] != "")) ? $siteEmail[$siteIndex] : $_SESSION['SystemEmail'];
-	if ($from == "") $from = "no-reply@tax-aide-reservations.no-email";
+	/*if ($from == "")*/ $from = "no-reply@tax-aide-reminder.no-email";
 	$from = htmlspecialchars_decode($from);
 
 	$headers = "From: " . $siteName[$siteIndex] . " Tax-Aide <" . $from . ">";
-	if ($_SESSION['TRACE']) {
-		error_log("REMIND: SYSTEM, Email to ". $apptEmail . " " . $headers);
-	}
-	
+
 	$subject = "Your Tax-Aide appointment";
 
 	$message = htmlspecialchars_decode($siteMessage[$siteIndex]);
@@ -102,9 +109,12 @@ while($row = mysqli_fetch_array($appointments)) {
 	if (! $success) {
 		$Errormessage .= "Not able to send email to $apptName at $apptEmail.";
 		$emerr = error_get_last()['message'];
-		if ($_SESSION['TRACE']) error_log("REMIND: " . $apptName . " at " . $apptEmail . ", Email error: ". $emerr);
+		if ($_SESSION['TRACE']) error_log("REMIND: SYSTEM, " . $apptName . " at " . $apptEmail . ", Email error: ". $emerr);
 	}
 	else {
+		if ($_SESSION['TRACE']) {
+			error_log("REMIND: SYSTEM, Email to ". $apptEmail . " " . $headers);
+		}
 		$statusTime = date("m/d_h:ia");
 		$apptStatus = "$statusTime: Email sent to $apptEmail (SYSTEM)%%$apptStatus";
 		$query = "UPDATE $APPT_TABLE SET";

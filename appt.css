@@ -289,22 +289,22 @@ table td {
 /* for sitemanage.php -------------------------------------------------------- */
 #access_admin {
 	position: absolute;
-	top: 7em;
+	top: 12em;
 	bottom: 1em;
-	width: calc(100% - 1em);
+	width: 100%;
 	text-align: center;
 	overflow-y: scroll;
 }
 #access_user {
 	text-align: left;
 }
+#system_selected,
 #site_selections {
 	font-size: 120%;
-}
-#site_selections {
 	width: 80%;
 	border: 2px solid black;
 	margin: auto;
+	margin-top: 0.5em;
 	height: 1.5em;
 }
 #menuTabDiv {
@@ -514,9 +514,11 @@ table td {
 #site_address,
 #site_contact,
 #osite_name,
+#site_instructions,
 #site_message {
 	width: 30em;
 }
+#site_instructions,
 #site_message {
 	height: 12em;
 	float: left;
@@ -1193,10 +1195,14 @@ table td {
 	cursor: pointer;
 	font-size: 75%;
 }
+#custInstructions,
 #custCB {
 	font-size: 120%;
 	border: 2px solid green;
 	text-align: center;
+}
+#custInstructions {
+	padding-left: 2px;
 }
 #custButton {
 	background-color: lightgreen;
