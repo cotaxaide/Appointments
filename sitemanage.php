@@ -1,7 +1,18 @@
 <?php
-ini_set('display_errors', '1');
+//ini_set('display_errors', '1');
 
 // ---------------------------- VERSION HISTORY -------------------------------
+// File Version 8.0
+//	Added ClearTrace (error log) function
+//	Added ability to modify default system confirmation/reminder message
+//	Added attachment list for the [ATTACHMENTS] shortcode
+//	Removed default notice
+// File Version 7.0
+// 	Added sticky table headers
+// 	Moved character coding to common routines
+// 	Allow shortcodes in Internet instructions
+// File Version 6.01a
+// 	Viewing email message had a "from undefined" after the message
 // File Version 6.01
 // 	Added textarea for taxpayer self-registering instruction for the site
 // 	Restructured site options into an array
@@ -47,6 +58,7 @@ $Site10dig = "";
 $SiteClosed = "";
 $SiteOpen = "";
 $SiteUserHome = "";
+$AttachContent = "";
 $ThisSiteOption = "";
 $ThisAddress = ["","","","","","",""];
 $UserPreferred = "";
@@ -67,15 +79,17 @@ $UserPreferred = $_SESSION["UserIndex"];
 $ThisUser= $_SESSION["UserIndex"];
 $UserFirst = $ThisFirst = $_SESSION["UserFirst"];
 $UserLast = $ThisLast = $_SESSION["UserLast"];
-$ThisHome = $_SESSION["UserHome"];
+$ThisHome = $UserHome = $_SESSION["UserHome"];
 $ThisName = $_SESSION["UserName"];
 $ThisPhone = $_SESSION["UserPhone"];
 $ThisEmail = $_SESSION["UserEmail"];
 $ThisUserOptions = $_SESSION["UserOptions"];
 $SystemGreeting = $_SESSION["SystemGreeting"];
 $SystemNotice = $_SESSION["SystemNotice"];
+$SystemConfirm = $_SESSION["SystemConfirm"];
+$SystemAttach = $_SESSION["SystemAttach"];
 $SystemURL = $_SESSION["SystemURL"];
-if (!isset($_SESSION["SystemEmail"])) $_SESSION["SystemEmail"] = "no_reply@tax_aide_reservations.no_email";
+if (!isset($_SESSION["SystemEmail"])) $_SESSION["SystemEmail"] = "no.reply@tax.aide.reservations.no.email";
 $SystemEmail = $_SESSION["SystemEmail"];
 if (! isset($_SESSION["UserSort"])) $_SESSION["UserSort"] = "user_last";
 // Check user permission
@@ -85,37 +99,28 @@ if ((! $isAdministrator) AND (! $isAppointmentManager)) {
 	exit;
 }
 
-// Create a default email confirmation message for new sites
-$ConfirmMessage = "NONEWelcome, [TPNAME]:\n\n";
-$ConfirmMessage .= "This is to confirm your appointment with AARP Tax-Aide to assist in preparing your tax return.\n\n";
+// Create a default system confirmation message
+$ConfirmMessage  = "Welcome, [TPNAME]:";
+$ConfirmMessage .= "\n\n";
+$ConfirmMessage .= "This is to confirm your appointment with AARP Tax-Aide to assist in preparing your tax return.";
+$ConfirmMessage .= "\n\n";
 $ConfirmMessage .= "You are scheduled for [TIME] on [DATE]\n";
 $ConfirmMessage .= "at the [SITENAME]\n";
 $ConfirmMessage .= "[ADDRESS]\n";
-$ConfirmMessage .= "[CITY], [STATE] [ZIP]\n\n";
-if ($_SESSION["SystemURL"]) {
-	$ConfirmMessage .= "You can find additional information and a handy checklist at our web site at [STATESITE]\n\n";
-}
-$ConfirmMessage .= "If you find that you no longer need this appointment,";
-$ConfirmMessage .= " please contact us at [PHONE] so that we can use this time for another person who does need our service.\n\n";
-$ConfirmMessage .= "We look forward to seeing you on [DATE]\n\n";
+$ConfirmMessage .= "[CITY], [STATE] [ZIP]";
+$ConfirmMessage .= "\n\n";
+$ConfirmMessage .= "You can find additional information and a handy checklist at our web site at [STATESITE]";
+$ConfirmMessage .= "\n\n";
+$ConfirmMessage .= "If you find that you no longer need this appointment, please contact us at [PHONE]";
+$ConfirmMessage .= " so that we can use this time for another person who does need our service.";
+$ConfirmMessage .= "\n\n";
+$ConfirmMessage .= "We look forward to seeing you on [DATE]";
+$ConfirmMessage .= "\n\n";
 $ConfirmMessage .= "Your AARP Tax-Aide friends at the [SITENAME].";
-
-// Create a default system greeting message
-$GreetingMessage = "AARP Foundation Tax-Aide, an AARP Foundation program, helps low- to moderate-income taxpayers";
-$GreetingMessage .= " have more discretionary income for everyday essentials, such as food and housing,";
-$GreetingMessage .= " by assisting with tax services and ensuring they receive applicable tax credits and deductions.";
-$GreetingMessage .= "<br /><br />";
-$GreetingMessage .= "AARP Foundation Tax-Aide is available free to taxpayers with low and moderate income,";
-$GreetingMessage .= " with special attention to those 60 and older.";
-$GreetingMessage .= " Through a cadre of trained volunteers, AARP Foundation Tax-Aide has helped low- to moderate-income";
-$GreetingMessage .= " individuals for more than 40 years in every state and the District of Columbia.";
-$GreetingMessage .= "<br /><br />";
-$GreetingMessage .= "AARP Foundation Tax-Aide is offered in cooperation with the IRS.";
-$GreetingMessage .= "<br /><br />";
-$GreetingMessage .= "<div id=\"disclaimer\">";
-$GreetingMessage .= "<b>Please note:</b> There are some tax issues that are beyond the scope of our volunteer training.";
-$GreetingMessage .= " Most things that a retired or low-income person has will be OK.";
-$GreetingMessage .= "</div>";
+if ($SystemConfirm == "") {
+	$SystemConfirm = $ConfirmMessage;
+	$_SESSION["SystemConfirm"] = _Clean_Chars($SystemConfirm);
+}
 
 // Get POST variables if changes were submitted
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
@@ -133,7 +138,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 		$SiteClosed =   htmlspecialchars(stripslashes(trim($_POST["SiteClosed"])));
 		$SiteMessage =  htmlspecialchars(stripslashes(trim($_POST["SiteMessage"])));
 		$SiteReminder = htmlspecialchars(stripslashes(trim($_POST["SiteReminder"])));
-		$SiteInstructions =              stripslashes(trim($_POST["SiteInstructions"]));
+		$SiteInstructions =                           trim($_POST["SiteInstructions"]);
+		$SiteAttach =                                 trim($_POST["SiteAttach"]);
 		$SiteLastRem =  htmlspecialchars(stripslashes(trim($_POST["SiteLastRem"])));
 		$UserCurrent =  htmlspecialchars(stripslashes(trim($_POST["UserCurrent"])));
 		$UserFirst =    htmlspecialchars(stripslashes(trim($_POST["UserFirst"])));
@@ -146,8 +152,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 		$UserPass =     htmlspecialchars(stripslashes(trim($_POST["UserPass"])));
 		$UserOptions =  htmlspecialchars(stripslashes(trim($_POST["UserOptions"])));
 		$UserSort =     htmlspecialchars(stripslashes(trim($_POST["UserSort"])));
-		$SystemGreeting =                stripslashes(trim($_POST["SystemGreeting"]));
-		$SystemNotice =                  stripslashes(trim($_POST["SystemNotice"]));
+		$SystemGreeting =                             trim($_POST["SystemGreeting"]);
+		$SystemNotice =                               trim($_POST["SystemNotice"]);
+		$SystemConfirm =                              trim($_POST["SystemConfirm"]);
+		$SystemAttach =                               trim($_POST["SystemAttach"]);
 		$SystemURL =    htmlspecialchars(stripslashes(trim($_POST["SystemURL"])));
 		$SystemEmail =  htmlspecialchars(stripslashes(trim($_POST["SystemEmail"])));
 	}
@@ -155,6 +163,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 	$UserFullName = "$UserFirst" . " " . "$UserLast";
 	if ($SiteClosed == "") $SiteClosed = $SiteOpen;
 	if ($SiteOpen == "") $SiteOpen = $SiteClosed = $NullDate;
+	if ($UserHome == 1) $UserHome = 0; // protection for unassigned
 	$_SESSION["SiteCurrent"] = $SiteCurrent;
 
 	// Process request
@@ -193,10 +202,11 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 			$query .= ", `site_10dig` = '$Site10dig'";
 			$addedby = ($isAdministrator) ? 0 : $SiteUserHome;
 			$query .= ", `site_addedby` = $addedby";
-			$SiteMessage = ($SiteMessage) ? $SiteMessage : $ConfirmMessage;
+			$SiteMessage = ($SiteMessage) ? $SiteMessage : $SystemConfirm;
 			$query .= ", `site_message` = '$SiteMessage'";
 			$query .= ", `site_reminder` = '$SiteReminder'";
 			$query .= ", `site_instructions` = '$SiteInstructions'";
+			$query .= ", `site_attach` = '$SiteAttach'";
 			$query .= ", `site_lastrem` = '$SiteLastRem'";
 			$query .= ", `site_open` = '$SiteOpen'";
 			$query .= ", `site_closed` = '$SiteClosed'";
@@ -326,7 +336,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 				$UserCurrent = $UserPreferred;
 			}
 			else {
-				$Errormessage .= "Could not add " . str_replace("!", "'", $UserFullName) . ". Review your data and try again.";
+				$Errormessage .= "Could not add " . _Show_Chars($UserFullName, "text") . ". Review your data and try again.";
 			}
 			$SiteUserHome = $SiteCurrent; // stay in the same site
 			break;
@@ -341,6 +351,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 			$query .= ", `site_message` = '$SiteMessage'";
 			$query .= ", `site_reminder` = '$SiteReminder'";
 			$query .= ", `site_instructions` = '$SiteInstructions'";
+			$query .= ", `site_attach` = '$SiteAttach'";
 			$query .= ", `site_lastrem` = '$SiteLastRem'";
 			$query .= " WHERE `site_index` = $SiteCurrent";
 			mysqli_query($dbcon, $query);
@@ -425,6 +436,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 			$query .= " WHERE `user_home` = $SiteCurrent";
 			$query .= " AND `user_options` = 'A'";
 			mysqli_query($dbcon, $query);
+			$query = "UPDATE $USER_TABLE SET";
+			$query .= " `user_appt_site` = 0";
+			$query .= " WHERE `user_appt_site` = $SiteCurrent";
+			mysqli_query($dbcon, $query);
 			if ($_SESSION["TRACE"]) error_log("MANAGE: " . $ThisName . ", Site $Site1Name deleted.");
 			break;
 
@@ -450,12 +465,16 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 			$query = "UPDATE $SYSTEM_TABLE SET";
 			$query .= " `system_greeting` = '$SystemGreeting'"; 
 			$query .= ", `system_notice` = '$SystemNotice'";
+			$query .= ", `system_confirm` = '$SystemConfirm'";
+			$query .= ", `system_attach` = '$SystemAttach'";
 			$query .= ", `system_url` = '$SystemURL'";
 			$query .= ", `system_email` = '$SystemEmail'";
 			$query .= " WHERE `system_index` = 1";
 			mysqli_query($dbcon, $query);
 			$_SESSION["SystemGreeting"] = $SystemGreeting;
 			$_SESSION["SystemNotice"] = $SystemNotice;
+			$_SESSION["SystemConfirm"] = $SystemConfirm;
+			$_SESSION["SystemAttach"] = $SystemAttach;
 			$_SESSION["SystemURL"] = $SystemURL;
 			$_SESSION["SystemEmail"] = $SystemEmail;
 			break;
@@ -466,7 +485,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 			$query .= " WHERE `system_index` = 1";
 			mysqli_query($dbcon, $query);
 			$_SESSION["TRACE"] = true;
-			error_log("MANAGE: " . $ThisName . ", " . $SiteAction);
+			if ($_SESSION["TRACE"]) error_log("MANAGE: " . $ThisName . ", " . $SiteAction);
 			break;
 
 		case "StopTrace":
@@ -481,19 +500,15 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 			header('Location: viewtrace.php');
 			break;
 
+		case "ClearTrace":
+			unlink('appt_error_log');
+			break;
+
 		case "SignOut":
 			session_unset();
 			header('Location: index.php');
 			exit();
 	}
-}
-
-if (! $_SESSION["SystemGreeting"]) {
-	$_SESSION["SystemGreeting"] = $GreetingMessage;
-	$query = "UPDATE $SYSTEM_TABLE SET";
-	$query .= " `system_greeting` = '$GreetingMessage'"; 
-	$query .= " WHERE `system_index` = 1";
-	mysqli_query($dbcon, $query);
 }
 
 // Make an array of user-managed and shared sites
@@ -538,19 +553,20 @@ $locs = mysqli_query($dbcon, $query);
 Get_Site_Options(); 
 $OptionList = "";
 while ($row = mysqli_fetch_array($locs)) {
-	$NewIndex   = htmlspecialchars_decode($row["site_index"]);
-	$NewLoc = htmlspecialchars_decode($row["site_name"]);
-	$NewAddress = explode("|",htmlspecialchars_decode($row["site_address"]));
-	$NewContact = htmlspecialchars_decode($row["site_contact"]);
-	$NewSumres = htmlspecialchars_decode($row["site_sumres"]);
-	$New10dig = htmlspecialchars_decode($row["site_10dig"]);
-	$NewInternet = htmlspecialchars_decode($row["site_inet"]);
-	$NewOpen = htmlspecialchars_decode($row["site_open"]);
-	$NewClosed = htmlspecialchars_decode($row["site_closed"]);
-	$NewMessage = htmlspecialchars_decode($row["site_message"]);
-	$NewReminder = htmlspecialchars_decode($row["site_reminder"]);
-	$NewLastRem = htmlspecialchars_decode($row["site_lastrem"]);
+	$NewIndex   = htmlspecialchars_decode($row["site_index"] ?? '');
+	$NewLoc = htmlspecialchars_decode($row["site_name"] ?? '');
+	$NewAddress = explode("|",htmlspecialchars_decode($row["site_address"] ?? ''));
+	$NewContact = htmlspecialchars_decode($row["site_contact"] ?? '');
+	$NewSumres = htmlspecialchars_decode($row["site_sumres"] ?? '');
+	$New10dig = htmlspecialchars_decode($row["site_10dig"] ?? '');
+	$NewInternet = htmlspecialchars_decode($row["site_inet"] ?? '');
+	$NewOpen = htmlspecialchars_decode($row["site_open"] ?? '');
+	$NewClosed = htmlspecialchars_decode($row["site_closed"] ?? '');
+	$NewMessage = htmlspecialchars_decode($row["site_message"] ?? '');
+	$NewReminder = htmlspecialchars_decode($row["site_reminder"] ?? '');
+	$NewLastRem = htmlspecialchars_decode($row["site_lastrem"] ?? '');
 	$NewInstructions = $row["site_instructions"];
+	$NewAttach = $row["site_attach"];
 
 	if ($SiteUserHome < 1) $SiteUserHome = $NewIndex;
 	$SiteCurrent = $SiteUserHome;
@@ -569,11 +585,12 @@ while ($row = mysqli_fetch_array($locs)) {
 		$ThisInternet = $NewInternet;
 		$ThisOpen = ($NewOpen == $NullDate) ? "" : $NewOpen;
 		$ThisClosed = ($NewClosed == $NullDate) ? "" : $NewClosed;
-		if (! $NewMessage) $NewMessage = $ConfirmMessage;
+		if (! $NewMessage) $NewMessage = $_SESSION["SystemConfirm"];;
 		$ThisMessage = $NewMessage;
 		$ThisReminder = $NewReminder;
 		$ThisLastRem = $NewLastRem;
 		$ThisInstructions = $NewInstructions;
+		$ThisAttach = $NewAttach;
 		$ThisSiteOptions = $ThisInternet; // start of option list is internet option
 	}
 
@@ -607,16 +624,16 @@ $query .= " ON $USER_TABLE.user_home = $SITE_TABLE.site_index";
 $query .= " ORDER BY site_name, user_last, user_first";
 $usrs = mysqli_query($dbcon, $query);
 while ($row = mysqli_fetch_array($usrs)) {
-	$NewIndex = htmlspecialchars_decode($row["user_index"]);
-	$NewFirst = htmlspecialchars_decode($row["user_first"]);
-	$NewName = htmlspecialchars_decode($row["user_name"]);
-	$NewLast = htmlspecialchars_decode($row["user_last"]);
-	$NewHome = htmlspecialchars_decode($row["user_home"]);
-	$NewApptSite = htmlspecialchars_decode($row["user_appt_site"]);
-	$NewEmail = htmlspecialchars_decode($row["user_email"]);
-	$NewPhone = htmlspecialchars_decode($row["user_phone"]);
-	$NewPass = htmlspecialchars_decode($row["user_pass"]);
-	$NewOptions = htmlspecialchars_decode($row["user_options"]);
+	$NewIndex = htmlspecialchars_decode($row["user_index"] ?? '');
+	$NewFirst = htmlspecialchars_decode($row["user_first"] ?? '');
+	$NewName = htmlspecialchars_decode($row["user_name"] ?? '');
+	$NewLast = htmlspecialchars_decode($row["user_last"] ?? '');
+	$NewHome = htmlspecialchars_decode($row["user_home"] ?? '');
+	$NewApptSite = htmlspecialchars_decode($row["user_appt_site"] ?? '');
+	$NewEmail = htmlspecialchars_decode($row["user_email"] ?? '');
+	$NewPhone = htmlspecialchars_decode($row["user_phone"] ?? '');
+	$NewPass = htmlspecialchars_decode($row["user_pass"] ?? '');
+	$NewOptions = htmlspecialchars_decode($row["user_options"] ?? '');
 	$AccOwner = $row["acc_owner"];
 	$AccUser = $row["acc_user"];
 	$AccOptions = $row["acc_option"];
@@ -672,7 +689,7 @@ while ($row = mysqli_fetch_array($usrs)) {
 	$UIndex[$j] = $NewIndex;
 	$UPhone[$j] = $NewPhone;
 	$UEmail[$j] = $LastEmail = $NewEmail;
-	$ULogin[$j] = htmlspecialchars_decode($row["user_lastlogin"]);
+	$ULogin[$j] = htmlspecialchars_decode($row["user_lastlogin"] ?? '');
 	$UMonth = +substr($ULogin[$j],5,2);
 	if ($UMonth < 10) $UMonth = "&nbsp;&nbsp;" . $UMonth;
 	$UDate[$j] = ($UMonth == "&nbsp;&sbsp;0") ? "?" : ($UMonth . "/" . substr($ULogin[$j],0,4));
@@ -867,6 +884,24 @@ function Write_Site_Option($othersite, $owner, $userid, $option) {
 	}
 }
 
+// -----------------------------------------------------------------------------
+function List_Attachments() {
+// -----------------------------------------------------------------------------
+	global $ThisAttach;
+	global $AttachContent;
+	$AttachContent = "";
+	$attSysList = explode("|", $_SESSION["SystemAttach"]);
+	if (sizeof($attSysList) < 2) return;
+	echo "<br />[ATTACHMENTS] (Check which below)";
+	echo "\n<span onchange=\"Change_Site_Attachments();\">";
+	for ($attindex = 0; $attindex < sizeof($attSysList)-1; $attindex++) {
+		$attrow = explode("=", _Show_Chars($attSysList[$attindex], "html"));
+		$attChecked = (strpos($ThisAttach, $attrow[0]) === false) ? "" : "checked" ;
+		echo "\n<br /><input type=\"checkbox\" class=\"siteattcheckbox\" title=\"$attrow[1]\" $attChecked> $attrow[0]";
+		$AttachContent .= "\n$attrow[0] ($attrow[1])";
+	}
+	echo "\n</span>";
+}
 
 // -----------------------------------------------------------------------------
 function List_Sites($selections) {
@@ -990,7 +1025,7 @@ function List_Users($ShowTPs) {
 		asort($TPsort);
 		foreach ($TPsort as $j => $value) {
 			echo "<tr>\n";
-			$displaytext = str_replace("!","'",$UList[$j]);
+			$displaytext = _Show_Chars($UList[$j], "text");
 			echo "\t<td id=\"TPNAME_"  . $UIndex[$j] . "\" onclick=\"Show_User(" . $UIndex[$j] . ", this.id);\">" . $displaytext . "</td>\n";
 			echo "\t<td id=\"TPPHONE_" . $UIndex[$j] . "\" onclick=\"Show_User(" . $UIndex[$j] . ", this.id);\">" . $UPhone[$j]  . "</td>\n";
 			echo "\t<td id=\"TPEMAIL_" . $UIndex[$j] . "\" onclick=\"Show_User(" . $UIndex[$j] . ", this.id);\">" . $UEmail[$j]  . "</td>\n";
@@ -1023,8 +1058,7 @@ function List_Users($ShowTPs) {
 				if (($SiteCurrent == 1) AND ($us > 1)) continue;
 
 				// get the name to be displayed
-				$displaytext = str_replace("!","'",$UList[$j]);
-				//$displaytext .= " $loop: $us $SiteCurrent"; // DEBUG
+				$displaytext = _Show_Chars($UList[$j], "text");
 	
 				// set a background color for the user and the site name for a group heading
 				$optiontext = " style='background-color:";
@@ -1124,9 +1158,10 @@ function Do_Search() {
 			$query .= " ORDER BY `user_email`, `user_last`, `user_first`";
 			break;
 		case "FindByName":
-			$query .= " WHERE `user_name` LIKE '%$UserName%'";
-			$query .= " OR `user_first` LIKE '%$UserName%'";
-			$query .= " OR `user_last` LIKE '%$UserName%'";
+			$n = _Clean_Chars($UserName);
+			$query .= " WHERE `user_name` LIKE '%$n%'";
+			$query .= " OR `user_first` LIKE '%$n%'";
+			$query .= " OR `user_last` LIKE '%$n%'";
 			$query .= " ORDER BY `user_last`, `user_first`, `user_name`";
 			break;
 	}
@@ -1140,8 +1175,8 @@ function Do_Search() {
 	}
 
 	while($row = mysqli_fetch_array($appointments)) {
-		$Name = htmlspecialchars_decode($row['appt_name']);
-		$Name = str_replace( "!", "'", $Name);
+		$Name = htmlspecialchars_decode($row['appt_name'] ?? '');
+		$Name = _Show_Chars($Name, "text");
 		$Date = $row['appt_date'];
 		$Time = $row['appt_time'];
 		$Site = $row['appt_location'];
@@ -1192,17 +1227,12 @@ function Show_Search() {
 				echo "<tr><td></td><td>First</td><td>Last</td><td>User&nbsp;Name</td><td>$colhead</td><td>User&nbsp;Role</td><td>Assigned Site</td></tr>\n";
 				$noMatchFound = false;
 			}
-			$Name = htmlspecialchars_decode($row['user_name']);
-			$Name = str_replace( "!", "'", $Name);
-			$Name = str_replace( "&", "&amp;", $Name);
-			$First = htmlspecialchars_decode($row['user_first']);
-			$First = str_replace( "!", "'", $First);
-			$First = str_replace( "&", "&amp;", $First);
-			$Last = htmlspecialchars_decode($row['user_last']);
-			$Last = str_replace( "!", "'", $Last);
+			$Name = _Show_Chars(htmlspecialchars_decode($row['user_name'] ?? ''), "text");
+			$First = _Show_Chars(htmlspecialchars_decode($row['user_first'] ?? ''), "text");
+			$Last = _Show_Chars(htmlspecialchars_decode($row['user_last'] ?? ''), "text");
 
 			$sitenumber = $row['user_home'];
-			if ($sitenumber > 0) {
+			if ($sitenumber > 1) {
 				$showtab = "Schedulers";
 				switch ($row['user_options']) {
 					case "A": $usertype = "Administrator"; break;
@@ -1268,8 +1298,8 @@ function Show_Search() {
 <!--==========================================================================================================-->
 <head>
 <title>AARP Appointments</title>
-<!-- meta http-equiv=Content-Type content="text/html" charset="us-ascii" -->
 <meta name=description content="AARP Site Management">
+<meta name="viewport" content="width=device-width">
 <link rel="SHORTCUT ICON" href="appt.ico">
 <link rel="stylesheet" href="appt.css">
 <script src="functions.js"></script>
@@ -1281,8 +1311,6 @@ function Show_Search() {
 	//		dbindex = SiteIndex[listindex];
 	//===========================================================================================
 
-	var Errormessage = "";
-	var Usermessage = "";
 	var old_sitedata = [];
 	var new_sitedata = [];
 	var old_systemdata = [];
@@ -1294,9 +1322,11 @@ function Show_Search() {
 	global $TodayDate;
 	echo "	var TodayDate = '$TodayDate';\n";
 	global $Errormessage;
-	echo "		Errormessage = \"$Errormessage\";\n";
+	echo "  var Errormessage = \"$Errormessage\";\n";
 	global $Usermessage;
-	echo "		Usermessage = \"$Usermessage\";\n";
+	echo "	var Usermessage = \"$Usermessage\";\n";
+	//global $ConfirmMessage;
+	//echo "	var ConfirmMessage = \"$ConfirmMessage\";\n";
 	global $SiteIndexList;
 	echo "	var SiteIndex = [" . $SiteIndexList . "];\n";
 	global $ThisSiteOptions;
@@ -1337,6 +1367,30 @@ function Show_Search() {
 	var AFlag = "";
 	var MFlag = "";
 	var reloadflag = false;
+	var attachContent = "";
+
+	// Set default email
+	var DefaultEmail = "no.reply@tax.aide.reservations.no.email";
+
+	// Create a default system greeting message
+	var GreetingMessage = "";
+	GreetingMessage += "AARP Foundation Tax-Aide, an AARP Foundation program, helps low- to moderate-income taxpayers";
+	GreetingMessage += " have more discretionary income for everyday essentials, such as food and housing,";
+	GreetingMessage += " by assisting with tax services and ensuring they receive applicable tax credits and deductions.";
+	GreetingMessage += "\n\n";
+	GreetingMessage += "AARP Foundation Tax-Aide is available free to taxpayers with low and moderate income,";
+	GreetingMessage += " with special attention to those 60 and older.";
+	GreetingMessage += " Through a cadre of trained and IRS accredited volunteers,";
+	GreetingMessage += " AARP Foundation Tax-Aide has helped low- to moderate-income";
+	GreetingMessage += " individuals for more than 40 years in every state and the District of Columbia.";
+	GreetingMessage += "\n\n";
+	GreetingMessage += "AARP Foundation Tax-Aide is offered in cooperation with the IRS.";
+	GreetingMessage += "\n\n";
+	GreetingMessage += "<div id=\"disclaimer\">";
+	GreetingMessage += "<b>Please note:</b> There are some tax issues that are beyond the scope of our volunteer training.";
+	GreetingMessage += " Most things that a retired or low-income person has will be OK.";
+	GreetingMessage += "</div>";
+
 
 	//===========================================================================================
 	function Initialize() {
@@ -1358,10 +1412,12 @@ function Show_Search() {
 		old_sitedata["open"] = site_open.value;
 		old_sitedata["closed"] = site_closed.value;
 		old_sitedata["instructions"] = site_instructions.value;
+		old_sitedata["attach"] = site_attach.value;
 		Build_User_Data(); // verifies and fills new_userdata array
 		old_userdata = new_userdata;
-		Display_System_Data();
 		old_systemdata["SystemGreeting"] = system_greeting.value;
+		old_systemdata["SystemConfirm"] = system_confirm.value;
+		old_systemdata["SystemAttach"] = system_attach.value = SystemAttach.value;
 		old_systemdata["SystemNotice"] = system_notice.value;
 		old_systemdata["SystemURL"] = system_url.value;
 		old_systemdata["SystemEmail"] = system_email.value;
@@ -1376,6 +1432,7 @@ function Show_Search() {
 		Restore_Site_Address();
 		Restore_Site_Email();
 		Restore_Site_Options();
+		Restore_Site_Attachments();
 		Restore_User_Data();
 
 		// Initialize new site data and show the current tab
@@ -1383,7 +1440,12 @@ function Show_Search() {
 		system_change_flag = false;
 		site_change_flag = false;
 		user_change_flag = false;
-		ShowPage(SiteForm.SiteView.value);
+		if ((site_name.value == 1) && (SiteForm.SiteView.value != "System")) {
+			ShowPage("Taxpayers");
+		}
+		else {
+			ShowPage(SiteForm.SiteView.value);
+		}
 
 
 		// Show any messages from the server
@@ -1401,7 +1463,7 @@ function Show_Search() {
 	//===========================================================================================
 	function ShowPage(pageid) {
 	//===========================================================================================
-		// Do not allow display of Site or Schedulers tabs
+		// Do not allow display of Site or Schedulers tabs for Unassigned site
 		if (old_sitedata["sitename"] === "Unassigned") {
 			menuTabSite.style.textDecoration = "line-through";
 			menuTabUsers.style.textDecoration = "line-through";
@@ -1425,6 +1487,7 @@ function Show_Search() {
 				menuTabSite.style.borderBottom = "1px solid black";
 				menuTabUsers.style.borderBottom = "none";
 				menuTabTPs.style.borderBottom = "1px solid black";
+				Resize_Div("Schedulers");
 				break;
 			case "Taxpayers":
 				site_page.style.display = "none";
@@ -1437,6 +1500,7 @@ function Show_Search() {
 				menuTabSite.style.borderBottom = "1px solid black";
 				menuTabUsers.style.borderBottom = "1px solid black";
 				menuTabTPs.style.borderBottom = "none";
+				Resize_Div("Taxpayers");
 				break;
 			case "System":
 				site_page.style.display = "none";
@@ -1450,6 +1514,7 @@ function Show_Search() {
 				menuTabUsers.style.borderBottom = "1px solid black";
 				menuTabTPs.style.borderBottom = "1px solid black";
 				user_information.style.display = "none";
+				Resize_Div("System Options");
 				break;
 			default: // "Site" or none
 				site_page.style.display = "block";
@@ -1463,6 +1528,7 @@ function Show_Search() {
 				menuTabSite.style.borderBottom = "none";
 				menuTabTPs.style.borderBottom = "1px solid black";
 				user_information.style.display = "none";
+				Resize_Div("Site Options");
 				pageid = "Site";
 				break;
 		}
@@ -1474,11 +1540,86 @@ function Show_Search() {
 	//===========================================================================================
 	function Change_System_Data() {
 	//===========================================================================================
-		// make sure there are no apostrophes in the text
-		// and insert newline characters to make the line breaks clearer
-		Display_System_Data();
+		if (system_greeting.value == "") system_greeting.value = GreetingMessage;
+		if (system_email.value == "") system_email.value = DefaultEmail;
+		if (system_confirm.value == "") system_confirm.value = ConfirmMessage;
 		gobutton.href = system_url.value;
+		Make_Attachment_List();
 		Display_System_Buttons();
+	}
+
+	//===========================================================================================
+	function Make_Attachment_List() {
+	//===========================================================================================
+		Attachment_List = "";
+		AttachTitleList = document.getElementsByClassName("system_attach_title");
+		AttachURLList = document.getElementsByClassName("system_attach_url");
+		var al = AttachTitleList.length;
+		for (i = 0; i < al; i++) {
+			if ((at = _Clean_Chars(AttachTitleList[i].value)) === "") continue;
+			if ((au = _Clean_Chars(AttachURLList[i].value)) === "") continue;
+			Attachment_List += (at + "=" + au + "|");
+		}
+		system_attach.value = Attachment_List;
+
+		// Add a blank line if not already there
+		if ((at !== "") && (au !== "")) Add_Attachment("", "").focus();
+	}
+
+	//===========================================================================================
+	function Show_Attachment_List() {
+	//===========================================================================================
+		// Remove current list
+		while (sat_body.lastChild) sat_body.removeChild(sat_body.lastChild);
+
+		// Add the new list
+		Attachment_Items = system_attach.value.split("|");
+		for (i = 0; i < Attachment_Items.length; i++) {
+			Attachment_Item_Parts = Attachment_Items[i].split("=");
+			Add_Attachment(Attachment_Item_Parts[0], Attachment_Item_Parts[1]);
+		}
+	}
+
+	//===========================================================================================
+	function Add_Attachment(title, url) {
+	//===========================================================================================
+		if (url == undefined) url = "";
+
+		// Create and add the row
+		new_attach_row = document.createElement("tr");
+		sat_body.appendChild(new_attach_row);
+
+			// Create and add the first column and input field
+			new_attach_title = document.createElement("td");
+			new_attach_row.appendChild(new_attach_title);
+				new_attach_i1 = document.createElement("input");
+				new_attach_title.appendChild(new_attach_i1);
+					new_attach_i1.value = title;
+					new_attach_i1.className = "system_attach_title";
+
+			// Create and add the second column and input field
+			new_attach_url = document.createElement("td");
+			new_attach_row.appendChild(new_attach_url);
+				new_attach_i2 = document.createElement("input");
+				new_attach_url.appendChild(new_attach_i2);
+					new_attach_i2.type = "url";
+					new_attach_i2.value = url;
+					new_attach_i2.className = "system_attach_url";
+
+			// Create and add the third column and button
+			new_attach_url = document.createElement("td");
+			new_attach_row.appendChild(new_attach_url);
+			if (url != "") {
+				new_attach_i3 = document.createElement("a");
+				new_attach_url.appendChild(new_attach_i3);
+					new_attach_i3.href = url;
+					new_attach_i3.target = "_blank";
+						new_attach_i3b = document.createElement("button")
+						new_attach_i3.appendChild(new_attach_i3b);
+							new_attach_i3b.innerHTML = "Verify";
+							new_attach_i3b.className = "system_attach_button";
+			}
+		return(new_attach_i2);
 	}
 
 	//===========================================================================================
@@ -1488,21 +1629,10 @@ function Show_Search() {
 		system_notice.value = old_systemdata["SystemNotice"];
 		system_url.value = old_systemdata["SystemURL"];
 		system_email.value = old_systemdata["SystemEmail"];
+		system_confirm.value = old_systemdata["SystemConfirm"];
+		system_attach.value = old_systemdata["SystemAttach"];
+		Show_Attachment_List();
 		Display_System_Buttons();
-	}
-
-	//===========================================================================================
-	function Display_System_Data() {
-	//===========================================================================================
-		// Change the visual display so that line breaks are clear.
-		system_greeting.value = system_greeting.value.replace(/\'/g,"&apos;");
-		system_greeting.value = system_greeting.value.replace(/\n/g,"");
-		system_greeting.value = system_greeting.value.replace(/<br\s*\/>/g,"\n<br \/>");
-		system_greeting.value = system_greeting.value.replace(/\n\n/g,"\n");
-		system_notice.value = system_notice.value.replace(/\'/g,"&apos;");
-		system_notice.value = system_notice.value.replace(/\n/g,"");
-		system_notice.value = system_notice.value.replace(/<br\s*\/>/g,"\n<br \/>");
-		system_notice.value = system_notice.value.replace(/\n\n/g,"\n");
 	}
 
 	//===========================================================================================
@@ -1514,6 +1644,8 @@ function Show_Search() {
 		// Check for a change in the system data
 		if (system_greeting.value != old_systemdata["SystemGreeting"]) system_change_flag = true; 
 		if (system_notice.value != old_systemdata["SystemNotice"]) system_change_flag = true; 
+		if (system_confirm.value != old_systemdata["SystemConfirm"]) system_change_flag = true; 
+		if (system_attach.value != old_systemdata["SystemAttach"]) system_change_flag = true; 
 		if (system_url.value != old_systemdata["SystemURL"]) system_change_flag = true; 
 		if (system_email.value != old_systemdata["SystemEmail"]) system_change_flag = true; 
 
@@ -1613,6 +1745,9 @@ function Show_Search() {
 		// Internet site instructions -------------------
 		new_sitedata["instructions"] = site_instructions.value;
 
+		// Attachment list -------------------
+		new_sitedata["attach"] = site_attach.value;
+
 		Display_Site_Buttons();
 		return (new_sitedata["address"]);
 	}
@@ -1710,12 +1845,16 @@ function Show_Search() {
 		site_website.value = "";
 		new_sitedata["address"] = ""; // clear saved address
 		site_instructions.value = "";
+		site_attach.value = "";
 		site_clients.checked = false;
 		site_clients_cblistonly.checked = false;
 		site_clients_options.style.display = "none";
+		site_10dig.checked = true;
 		site_clients_inet.style.border = "";
 		new_sitedata["options"] = "";
+		site_add.style.visibility = "hidden";
 		site_add_flag = true;
+		Resize_Div("New Site");
 
 		Display_Site_Buttons();
 		site_new_name.focus();
@@ -1743,8 +1882,6 @@ function Show_Search() {
 			}
 
 		site_contact.value = old_sitedata["contact"];
-		
-		Display_Site_Buttons();
 	}
 
 	//===========================================================================================
@@ -1787,6 +1924,40 @@ function Show_Search() {
 		}
 		site_reminder.style.disabled = (site_reminder.value == "");
 		site_lastrem.style.disabled = (site_lastrem.value == "");
+	}
+
+
+	// ============================================================================
+	function Restore_Site_Attachments() {
+	// ============================================================================
+		siteAttList = document.getElementsByClassName("siteattcheckbox");
+		if (siteAttList.length == 0) return;
+		systAttList = SystemAttach.value.split("|");
+		for (attindex = 0; attindex < systAttList.length - 1; attindex++) {
+			sysTitle = systAttList[attindex].split("=")[0];
+			siteAttList[attindex].checked = old_sitedata["attach"].includes(sysTitle);
+		}
+		Change_Site_Attachments();
+	}
+
+	// ============================================================================
+	function Change_Site_Attachments() {
+	//	attachContent is formatted for the "View" buttons
+	// ============================================================================
+		new_sitedata["attach"] = "";
+		attachContent = "";
+		var attachBreak = "";
+		siteAttList = document.getElementsByClassName("siteattcheckbox");
+		systAttList = SystemAttach.value.split("|");
+		for (attindex = 0; attindex < siteAttList.length; attindex++) {
+			if (siteAttList[attindex].checked) {
+				systAttLine = _Show_Chars(systAttList[attindex], "text").split("=");
+				new_sitedata["attach"] += (systAttLine[0] + "|");
+				attachContent += (attachBreak + " - " + systAttLine[0] + " (" + systAttLine[1]);
+				attachBreak = "<br />"; // add a line break before the next attachment
+			}
+		}
+		site_attach.value = new_sitedata["attach"];
 	}
 
 	//===========================================================================================
@@ -1878,8 +2049,6 @@ function Show_Search() {
 		site_clients_inet.style.border = (site_clients.checked) ? "1px solid grey" : "";
 		view_i_button.style.display = (site_clients.checked) ? "inline" : "none"; 
 		site_others_access.style.border = (site_others.checked) ? "1px solid grey" : "";
-
-		Display_Site_Buttons();
 	}
 
 	//===========================================================================================
@@ -1975,6 +2144,9 @@ function Show_Search() {
 
 			// Check for a change in the site instructions
 			if (site_instructions.value != old_sitedata["instructions"]) site_change_flag = true;
+
+			// Check for a change in the site attachments
+			if (site_attach.value != old_sitedata["attach"]) site_change_flag = true;
 		}
 
 		// Determine what buttons to show
@@ -2014,47 +2186,72 @@ function Show_Search() {
 	}
 
 	//===========================================================================================
-	function View_Message($how) {
+	function View_Message() {
 	// Displays the email message a user would recieve
 	//===========================================================================================
-		vm = site_message.value + " from " + $how;
-		vm = vm.replace(/\[TPNAME\]/g,"Jack & Jill Taxpayer");
-		vm = vm.replace(/\[TIME\]/g,"2:30 am");
+ 		// convert text to HTML
+		vm = _Clean_Chars(site_message.value);
+		vm = _Show_Chars(vm, "html");
 		vmdate = "1/1/" + (+TodayDate.substr(0,4) + 1);
-		vm = vm.replace(/\[DATE\]/g,vmdate);
-		vm = vm.replace(/\[SITENAME\]/g,site_current_name.value);
-		vm = vm.replace(/\[STATESITE\]/g,"<?php echo $_SESSION['SystemURL']; ?>");
-		vm = vm.replace(/\[ADDRESS\]/g,site_address.value);
-		vm = vm.replace(/\[CONTACT\]/g,site_contact.value);
-		vm = vm.replace(/\[CITY\]/g,site_city.value);
-		vm = vm.replace(/\[STATE\]/g,site_state.value);
-		vm = vm.replace(/\[ZIP\]/g,site_zip.value);
-		vm = vm.replace(/\[PHONE\]/g,site_phone.value);
-		vm = vm.replace(/\[EMAIL\]/g,site_email.value);
-		vm = vm.replace(/\[WEBSITE\]/g,site_website.value);
-		alert (vm);
+
+		// replace shortcodes
+		vm = vm.replace(/\[TPNAME\]/g,      "Jack & Jill Taxpayer");
+		vm = vm.replace(/\[TIME\]/g,        "2:30 am");
+		vm = vm.replace(/\[DATE\]/g,        vmdate);
+		vm = vm.replace(/\[SITENAME\]/g,    site_current_name.value);
+		vm = vm.replace(/\[STATESITE\]/g,   "<?php echo $_SESSION['SystemURL']; ?>");
+		vm = vm.replace(/\[ADDRESS\]/g,     site_address.value);
+		vm = vm.replace(/\[CONTACT\]/g,     site_contact.value);
+		vm = vm.replace(/\[CITY\]/g,        site_city.value);
+		vm = vm.replace(/\[STATE\]/g,       site_state.value);
+		vm = vm.replace(/\[ZIP\]/g,         site_zip.value);
+		vm = vm.replace(/\[PHONE\]/g,       site_phone.value);
+		vm = vm.replace(/\[EMAIL\]/g,       site_email.value);
+		vm = vm.replace(/\[WEBSITE\]/g,     site_website.value);
+		vm = vm.replace(/\[ATTACHMENTS\]/g, attachContent);
+		Show_It(vm);
 	}
 
 	//===========================================================================================
 	function View_Instructions($how) {
 	// Displays the instructions as presented on the appointment selection screen
 	//===========================================================================================
-		vm = site_instructions.value;
-		//vm = vm.replace(/\[TPNAME\]/g,"Jack & Jill Taxpayer");
-		//vm = vm.replace(/\[TIME\]/g,"2:30 am");
-		//vmdate = "1/1/" + (+TodayDate.substr(0,4) + 1);
-		//vm = vm.replace(/\[DATE\]/g,vmdate);
-		//vm = vm.replace(/\[SITENAME\]/g,site_current_name.value);
-		//vm = vm.replace(/\[STATESITE\]/g,"<?php echo $_SESSION['SystemURL']; ?>");
-		//vm = vm.replace(/\[ADDRESS\]/g,site_address.value);
-		//vm = vm.replace(/\[CONTACT\]/g,site_contact.value);
-		//vm = vm.replace(/\[CITY\]/g,site_city.value);
-		//vm = vm.replace(/\[STATE\]/g,site_state.value);
-		//vm = vm.replace(/\[ZIP\]/g,site_zip.value);
-		//vm = vm.replace(/\[PHONE\]/g,site_phone.value);
-		//vm = vm.replace(/\[EMAIL\]/g,site_email.value);
-		//vm = vm.replace(/\[WEBSITE\]/g,site_website.value);
-		alert (vm);
+ 		// convert text to HTML
+		vm = _Clean_Chars(site_instructions.value);
+		vm = _Show_Chars(vm, "html");
+
+		// replace shortcodes
+		if (vm == "") vm = "(No message to view)";
+		vm = vm.replace(/\[TPNAME\]/g,      "Jack & Jill Taxpayer");
+		vm = vm.replace(/\[TIME\]/g,        "");
+		vm = vm.replace(/\[DATE\]/g,        "");
+		vm = vm.replace(/\[SITENAME\]/g,    site_current_name.value);
+		vm = vm.replace(/\[STATESITE\]/g,   "<?php echo $_SESSION['SystemURL']; ?>");
+		vm = vm.replace(/\[ADDRESS\]/g,     site_address.value);
+		vm = vm.replace(/\[CONTACT\]/g,     site_contact.value);
+		vm = vm.replace(/\[CITY\]/g,        site_city.value);
+		vm = vm.replace(/\[STATE\]/g,       site_state.value);
+		vm = vm.replace(/\[ZIP\]/g,         site_zip.value);
+		vm = vm.replace(/\[PHONE\]/g,       site_phone.value);
+		vm = vm.replace(/\[EMAIL\]/g,       site_email.value);
+		vm = vm.replace(/\[WEBSITE\]/g,     site_website.value);
+		vm = vm.replace(/\[ATTACHMENTS\]/g, attachContent);
+		Show_It(vm);
+	}
+	//===========================================================================================
+	function Show_It(content) {
+	//	Show the content in a new window
+	//===========================================================================================
+		Roster = window.open("","","menubar=1, scrollbars=1, resizeable=1, height=200, width=" + screen.width/3);
+		Roster.document.writeln("<!DOCTYPE html>");
+		Roster.document.writeln("<head>");
+		Roster.document.writeln("<style>");
+		Roster.document.writeln("body {width: 8in;}");
+		Roster.document.writeln("</style>");
+		Roster.document.writeln("</head>");
+		Roster.document.writeln("<body>");
+		Roster.document.writeln(content);
+		Roster.document.writeln("</body>");
 	}
 
 	//===========================================================================================
@@ -2404,6 +2601,7 @@ function Show_Search() {
 		acc_email.value = "";
 		acc_phone.value = "";
 		acc_pass.value = "";
+		sendemail.style.display = "none";
 
 		// Default options to Scheduler with full access at current site
 		si = site_name.options[site_name.selectedIndex].value;
@@ -2565,6 +2763,11 @@ function Show_Search() {
 					alert("Please enter a site name.");
 					return;
 				}
+				scn = site_new_name.value.replace(/\'/g,"").replace(/\"/g,"");
+				if (scn !== site_new_name.value) {
+					alert("Please don't use quotes or apostrophes in the site name.");
+					return;
+				}
 				//Check_For_Changes("before adding a new site."); // check done earlier
 				SiteForm.Site1Name.value = site_new_name.value;
 				Build_Site_Address();
@@ -2572,13 +2775,14 @@ function Show_Search() {
 				SiteForm.SiteContact.value = new_sitedata["contact"];
 				SiteForm.SiteSumres.value = new_sitedata["sumres"];
 				SiteForm.Site10dig.value = new_sitedata["10dig"];
-				SiteForm.SiteMessage.value = site_message.value.replace(/\n/g,"%%").replace(/\'/g,"&apos;");
+				SiteForm.SiteMessage.value = _Clean_Chars(site_message.value);
 				SiteForm.SiteReminder.value = new_sitedata["reminder"];
 				SiteForm.SiteLastRem.value = new_sitedata["lastrem"];
 				SiteForm.SiteOptions.value = new_sitedata["options"];
 				SiteForm.SiteOpen.value = new_sitedata["open"];
 				SiteForm.SiteClosed.value = new_sitedata["closed"];
-				SiteForm.SiteInstructions.value = site_instructions.value.trim().replace(/\n/g,"%%").replace(/\'/g,"&apos;");
+				SiteForm.SiteInstructions.value = _Clean_Chars(site_instructions.value);
+				SiteForm.SiteAttach.value = new_sitedata["attach"];
 				break;
 
 			case "ChangeSite":
@@ -2586,18 +2790,24 @@ function Show_Search() {
 					alert("Please enter a site name.");
 					return;
 				}
+				scn = site_current_name.value.replace(/\'/g,"").replace(/\"/g,"");
+				if (scn !== site_current_name.value) {
+					alert("Please don't use quotes or apostrophes in the site name.");
+					return;
+				}
 				SiteForm.Site1Name.value = site_current_name.value;
 				SiteForm.Site1Address.value = new_sitedata["address"];
 				SiteForm.SiteContact.value = new_sitedata["contact"];
 				SiteForm.SiteSumres.value = new_sitedata["sumres"];
 				SiteForm.Site10dig.value = new_sitedata["10dig"];
-				SiteForm.SiteMessage.value = site_message.value.replace(/\n/g,"%%").replace(/\'/g,"&apos;");
+				SiteForm.SiteMessage.value = _Clean_Chars(site_message.value);
 				SiteForm.SiteReminder.value = new_sitedata["reminder"];
 				SiteForm.SiteLastRem.value = new_sitedata["lastrem"];
 				SiteForm.SiteOptions.value = new_sitedata["options"];
 				SiteForm.SiteOpen.value = new_sitedata["open"];
 				SiteForm.SiteClosed.value = new_sitedata["closed"];
-				SiteForm.SiteInstructions.value = site_instructions.value.trim().replace(/\n/g,"%%").replace(/\'/g,"&apos;").trim();
+				SiteForm.SiteInstructions.value = _Clean_Chars(site_instructions.value);
+				SiteForm.SiteAttach.value = new_sitedata["attach"];
 				break;
 
 			case "SwitchSite":
@@ -2614,10 +2824,10 @@ function Show_Search() {
 				Check_For_Changes("before adding a new user.");
 				Build_User_Data(); // verify input
 				if (new_userdata["fail"]) return; // already got an error message
-				SiteForm.UserFirst.value = acc_first.value.replace("'","!");
-				SiteForm.UserLast.value = acc_last.value.replace("'","!");
+				SiteForm.UserFirst.value = _Clean_Chars(acc_first.value);
+				SiteForm.UserLast.value = _Clean_Chars(acc_last.value);
 				SiteForm.UserName.value = acc_name.value;
-				SiteForm.UserHome.value = acc_home.value;
+				SiteForm.UserHome.value = (acc_home.value == 1) ? 0 : acc_home.value;
 				SiteForm.UserEmail.value = acc_email.value;
 				SiteForm.UserPhone.value = acc_phone.value;
 				SiteForm.UserPass.value = acc_pass.value;
@@ -2626,8 +2836,8 @@ function Show_Search() {
 			case "ChangeUser":
 				Build_User_Data(); // verify input
 				if (new_userdata["fail"]) return; // got an error message
-				SiteForm.UserFirst.value = acc_first.value.replace("'","!");
-				SiteForm.UserLast.value = acc_last.value.replace("'","!");
+				SiteForm.UserFirst.value = _Clean_Chars(acc_first.value);
+				SiteForm.UserLast.value = _Clean_Chars(acc_last.value);
 				SiteForm.UserName.value = acc_name.value;
 				// is this a taxpayer or a scheduler to be moved to be a taxpayer?
 				if (((SiteForm.SiteView.value == "Taxpayers") || maketp.checked) && (! makeappt.checked)) {
@@ -2732,10 +2942,12 @@ function Show_Search() {
 				for (j in old_sitedata) new_sitedata[j] = old_sitedata[j];
 				site_add_flag = false;
 				site_change_flag = false;
-				//new_sitedata["options"] = old_sitedata["options"];
+				site_add.style.visibility = "visible";
 				Restore_Site_Address();
 				Restore_Site_Email();
 				Restore_Site_Options();
+				Restore_Site_Attachments();
+				Display_Site_Buttons();
 				return;
 
 			case "CancelUser":
@@ -2761,13 +2973,14 @@ function Show_Search() {
 				break;
 
 			case "ChangeSystem":
-				if (system_email.value == "") system_email.value = "no_reply@tax_aide_reservations.no_email";
 				results = _Verify_Email(system_email.value, "alert");
 				if (results[0]) return;
-				SiteForm.SystemGreeting.value = system_greeting.value;
-				SiteForm.SystemNotice.value = system_notice.value;
-				SiteForm.SystemURL.value = system_url.value;
 				SiteForm.SystemEmail.value = system_email.value;
+				SiteForm.SystemGreeting.value = _Clean_Chars(system_greeting.value);
+				SiteForm.SystemNotice.value = _Clean_Chars(system_notice.value);
+				SiteForm.SystemConfirm.value = _Clean_Chars(system_confirm.value);
+				SiteForm.SystemAttach.value = _Clean_Chars(system_attach.value);
+				SiteForm.SystemURL.value = system_url.value;
 				system_change_flag = false;
 				break;
 
@@ -2784,6 +2997,7 @@ function Show_Search() {
 			case "StartTrace":
 			case "StopTrace":
 			case "ViewTrace":
+			case "ClearTrace":
 				break;
 
 			default:
@@ -2797,18 +3011,7 @@ function Show_Search() {
 	//===========================================================================================
 	function Print_Roster() {
 	//===========================================================================================
-		Roster = window.open("","","menubar=1, scrollbars=1, resizeable=1, width=" + screen.width/2);
-		Roster.document.writeln("<!DOCTYPE html>");
-		Roster.document.writeln("<head>");
-		Roster.document.writeln("<style>");
-		Roster.document.writeln("body {width: 8in;}");
-		Roster.document.writeln("</style>");
-		Roster.document.writeln("</head>");
-		Roster.document.writeln("<body>");
-		Roster.document.writeln("<table>");
-		Roster.document.writeln("<?php echo $ManagerRoster ?>");
-		Roster.document.writeln("</table>");
-		Roster.document.writeln("</body>");
+		Show_It("<table style=\"white-space:nowrap\"><?php echo $ManagerRoster ?></table>");
 	}
 
 	//===========================================================================================
@@ -2851,6 +3054,47 @@ function Show_Search() {
 			matchSet[j].style.display = (showMine.checked) ? "none" : "table-row";
 		}
 	}
+
+	//===========================================================================================
+	function Resize_All_Divs() {	// show or hide other site matches
+	//===========================================================================================
+		Resize_Div("System Options");
+		Resize_Div("Schedulers");
+		Resize_Div("Taxpayers");
+		Resize_Div("Site Options");
+		Resize_Div("New Site");
+	}
+
+	//===========================================================================================
+	function Resize_Div(tabname) {	// adjust size of certain divs that overflow
+	//===========================================================================================
+		switch (tabname) {
+		case "Schedulers":
+			divname = "user_list_div";
+			bottomAdjust = 210;
+			break;
+		case "Taxpayers":
+			divname = "inet_list_div";
+			bottomAdjust = 210;
+			break;
+		case "Site Options":
+			divname = "site_options_div";
+			bottomAdjust = 250;
+			break;
+		case "New Site":
+			divname = "site_options_div";
+			bottomAdjust = 270;
+			break;
+		case "System Options":
+			divname = "system_options_div";
+			bottomAdjust = 250;
+			break;
+		}
+		window_height = window.innerHeight;
+		divElement = document.getElementById(divname);
+		div_top = divElement.offsetTop;
+		divElement.style.maxHeight = Math.max(0, (window_height - div_top - bottomAdjust)) + "px";
+	}
 	
 //===========================================================================================
 function Test_For_Enter(id, e) {
@@ -2869,13 +3113,13 @@ function Test_For_Enter(id, e) {
 <!-- ============================================HTML========================================= -->
 <!-- ============================================HTML========================================= -->
 <!-- ============================================HTML========================================= -->
-<body onload="Initialize()">
+<body onload="Initialize()" onresize="Resize_All_Divs();">
 
 <div id="Main">
 
 	<div class="appt_page_header">
 		<h1>Site and User Administration</h1>
-		<?php echo "You are signed in as " . str_replace("!","'",$_SESSION["UserFullName"]);?>
+		<?php echo "You are signed in as " . _Show_Chars($_SESSION["UserFullName"], "text");?>
 
 		<div class="menu-buttons">
 			<div class="menuButton" onclick="Action_Request('GoToAppointments')">Manage appointments</div>
@@ -2902,6 +3146,7 @@ function Test_For_Enter(id, e) {
 					echo "\t\t<div class='menuButtonListItem' id='turn_trace_on' onclick='Action_Request(\"StartTrace\");'>Turn trace on</div>\n";
 				}
 				echo "\t\t<div class='menuButtonListItem' id='show_trace' onclick='Action_Request(\"ViewTrace\");'>View trace</div>\n";
+				echo "\t\t<div class='menuButtonListItem' id='clear_trace' onclick='Action_Request(\"ClearTrace\");'>Clear error log</div>\n";
 				echo "\t\t<div class='menuButtonListItem' id='php_info' onclick='window.open(\"show_phpinfo.php\");'>View PHP settings</div>\n";
 			echo "\t</div>\n";
 		echo "</div>\n";
@@ -2912,12 +3157,15 @@ function Test_For_Enter(id, e) {
 	</div>
 
 	<div id="site_selections" class="safe">
-		<b>Site being managed:</b> <select id="site_name" class="site_name" onchange="Action_Request('SwitchSite');">
+		<b>Site being managed:</b> <select id="site_name" class="site_name" 
+			title="Select the site you wish to manage"
+			onchange="Action_Request('SwitchSite');">
 			<?php
 			List_Sites("mine");
 			?>
 			</select>
 	</div>
+
 	<div id="system_selected" class="safe">
 		<b>System options being managed</b>
 	</div>
@@ -2962,70 +3210,121 @@ function Test_For_Enter(id, e) {
 
 <div id="admin_pages">
 
-<!-- ================================= System Page ======================================== -->
+<!-- ================================= System Tab ======================================== -->
 <div id="system_page" style="display: none;">
+<div id="system_wrapper" class="safe" style="border: 1px solid black;">
 
-	<div id="system_options" class="safe" style="overflow: auto;">
+	<div id="system_page_div" class="safe">
 
 		<br />
 
-		<div id="system_options_div">
-			<table id="system_options_table">
-				<tr>	<td>OPTION</td><td></td><td>VALUE or STATUS</td></tr>
-				<tr>	<td>System Version:</td><td></td>
-					<td><?php echo $_SESSION["SystemVersion"]; ?></td><td></td></tr>
-				<tr>	<td>State Web Site [STATESITE]:</td><td></td>
-					<td><input id="system_url" type="url" value="<?php echo $_SESSION['SystemURL']; ?>"
-						onchange = "Change_System_Data()" /></td>
-					<td><a id="gobutton" href="<?php echo $_SESSION['SystemURL']; ?>" target="_blank"><button>Go there</button></a>
-					</td></tr>
+		<table id="system_options_table">
+			<tr>	<td>OPTION</td><td></td><td>VALUE or STATUS</td></tr>
+			<tr>	<td>System Version:</td><td></td>
+				<td colspan="2" class="left"><?php echo $_SESSION["SystemVersion"]; ?></td></tr>
+			<tr>	<td>State Web Site [STATESITE]:</td><td></td>
+				<td><input id="system_url" type="url" value="<?php echo $_SESSION['SystemURL']; ?>"
+					title="Enter the web address for the state's web site"
+					onchange = "Change_System_Data()" />&nbsp;</td>
+				<td><a id="gobutton" href="<?php echo $_SESSION['SystemURL']; ?>" target="_blank"> <button style="margin:0 0 0 1em;">Go there</button></a>
+				</td></tr>
+	
+			<tr>	<td>Default Email:</td><td></td>
+				<td colspan="2"><input id="system_email" type="email"
+					title="the default From: address for email messages"
+					value="<?php echo $_SESSION['SystemEmail'];?>"
+					onchange="Change_System_Data()" />
+				</td></tr>
 
-				<tr>	<td>Default Email:</td><td></td>
-					<td colspan="2"><input id="system_email" type="email"
-						value="<?php echo $_SESSION['SystemEmail'];?>"
-						onchange="Change_System_Data()" />
-					</td></tr>
+			<tr>	<td>Periodic email reminder:</td><td></td>
+				<td colspan="2" class="left"><?php
+					if ($_SESSION['SystemReminders']) echo "Last ran on " . $_SESSION['SystemReminders'] . "."; 
+					else echo "(No timed reminder task has run.)"
+				?>
+				</td></tr>
+		</table>
+	</div> <!-- system_page_div -->
 
-				<tr>	<td>Periodic email reminder:</td><td></td>
-					<td><?php
-						if ($_SESSION['SystemReminders']) echo "Last ran on " . $_SESSION['SystemReminders'] . "."; 
-						else echo "(No timed reminder task has run.)"
-					?>
-					</td></tr>
-			</table>
-		</div>
+	<hr />
 
-		<hr />
-
+	<div id="system_options_div" class="safe" style="overflow: auto;">
 		<div id="system_greeting_div">
-			Login Greeting
+			Login Page Greeting
 			<!-- do not split the folowing line -->
-			<textarea id="system_greeting" onchange="Change_System_Data()"><?php echo $_SESSION["SystemGreeting"];?></textarea>
+			<textarea id="system_greeting" onchange="Change_System_Data()"><?php echo _Show_Chars($_SESSION["SystemGreeting"], "text");?></textarea>
 		</div>
 
-		<div id="system_html_div">
+		<div id="system_greeting_info_div">
 			<br />The &quot;greeting&quot; field to the left and the &quot;notice&quot; field below appear on the sign-in page.
 			Both fields can contain HTML coding to display text, for example:
-			<ul>
+			<ul class="left">
 				<li> Use &lt;b&gt;some text&lt;/b&gt; to make <b>some text</b> bold.</li>
 				<li> Use &lt;i&gt;some text&lt;/i&gt; to make <i>some text</i> italic.</li>
 				<li> Use &lt;u&gt;some text&lt;/u&gt; to make <u>some text</u> underlined.</li>
 				<li> Nest them: &lt;u&gt;&lt;b&gt;&lt;i&gt;some text&lt;/i&gt;&lt;/b&gt;&lt;u&gt; to make <u><b><i>some text</i></b></u> do combinations.</li>
-				<li> Use &lt;br /&gt; to start a new line. (Leaving blank lines won&apos;t do it.) Use 2 of them to skip a line.</li>
-				<li> Use &amp;apos; for an apostrophe (&apos;) - if you don&apos;t, we&apos;ll fix it.</li>
-				<li> To restore the default greeting, simply clear the box to the left and click the save button at the bottom of the window.</li>
 			</ul>
+			To restore the default greeting, simply clear the box to the left and click the save button at the bottom of the window.</li>
 		</div>
-
-		<hr />
 
 		<div id="system_notice_div">
-			Login Notice:
+		<br />
+			Login Page Notice:
 			<!-- do not split the folowing line -->
-			<textarea id="system_notice" onchange = "Change_System_Data()"><?php echo $_SESSION["SystemNotice"];?></textarea>
+			<textarea id="system_notice" onchange = "Change_System_Data()"><?php echo _Show_Chars($_SESSION["SystemNotice"], "text");?></textarea>
 		</div>
 
-	</div> <!-- system_options -->
+		<div id="system_notice_info_div">
+			<br /><br />The system notice is generally blank during the normal season but can be used to indicate that
+			the season is over or that some special conditions need to be brought to the attention of users
+			(e.g. during the COVID-19 epidemic, system is temporarily off-line, etc.)
+		</div>
+
+		<div id="system_confirm_div">	
+		<br />
+			Default confirmation email:
+			<!-- do not split the folowing line -->
+			<textarea id="system_confirm" onchange="Change_System_Data()"><?php echo _Show_Chars($_SESSION["SystemConfirm"], "text");?></textarea>
+		</div>
+
+		<div id="system_confirm_info_div">
+			<br /><br />The default confirmation email should contain only ascii text, no HTML coding. 
+			It can contain the following shortcodes which will be replaced with text when emailed:
+			<br />[STATESITE] (state web site as defined above)
+			<br />[SITENAME] (site's name)
+			<br />[ADDRESS] (site's street address)
+			<br />[CITY], [STATE], [ZIP] (site's address)
+			<br />[CONTACT] (site's contact name)
+			<br />[PHONE] (site's contact phone)
+			<br />[EMAIL] (site's email)
+			<br />[DATE], [TIME] (date and time of appointment)
+			<br />[ATTACHMENTS] (defined below)
+			<br />To restore the sample confirmation message, clear the box to the left and
+				click the save button at the bottom of the window.
+		</div>
+
+		<div id="system_attach_div">	
+			<br />
+			<!-- system_attach is hidden temporary storage -->
+			Attachments list: <input id="system_attach" style="display: none;" />
+			<table id="system_attach_table" onchange="Change_System_Data()">
+				<thead>
+				<tr>	<th>Attachment title</th><th>Attachment URL</th></tr>
+				</thead>
+				<tbody id="sat_body"></tbody>
+			</table>
+		</div>
+
+		<div id="system_attach_info_div">
+			<br /><br />The attachment list provides links to documents and/or web sites.
+			These attachments can be selected by site and applied to email confirmation and
+			reminder messages.
+			<br />For the URL, include the http:// or https:// prefix.
+			<br />To remove an entry, clear either the title or URL field and save.
+		</div>
+
+	</div> <!-- system_options_div -->
+
+</div> <!-- system_wrapper -->
 
 	<div id="system_option_buttons">
 		<button id="system_change" class="safe"    onclick="Action_Request('ChangeSystem');">Save changes</button>
@@ -3034,7 +3333,7 @@ function Test_For_Enter(id, e) {
 
 </div> <!-- system_page -->
 
-<!-- ================================= Site Page ======================================== -->
+<!-- ================================= Site Tab ======================================== -->
 <div id="site_page">
 
 	<div id="site_options" class="safe">
@@ -3048,79 +3347,91 @@ function Test_For_Enter(id, e) {
 			</table>
 		</div>
 
+		<div id="site_options_div" style="overflow: auto;">
+
 		<div id="site_current" onchange="Build_Site_Address();">
 			<table id="site_current_table" class="address_table">
-				<tr><td>Current site name:</td><td><input id="site_current_name" type="text" 
+				<tr><td>Current site name:</td><td><input id="site_current_name" title="Site name (include the city first in the name)" type="text" 
 					value="<?php global $ThisLoc; echo $ThisLoc; ?>" /></td><td>[SITENAME]</td></tr>
 			</table>
 		</div>
 
 		<div id="site_address_block" onchange="Build_Site_Address();">
 			<table id="site_address_table" class="address_table">
-				<tr><td>Address:</td><td><input id="site_address" type="text"
+				<tr><td>Address:</td><td><input id="site_address" title="Site address" type="text"
 					value="<?php global $ThisAddress; echo $ThisAddress[0];?>" /></td>
 					<td>[ADDRESS]</td></tr>
-				<tr><td>City:</td><td><input id="site_city" type="text"
+				<tr><td>City:</td><td><input id="site_city" title="Site city address" type="text"
 					value="<?php global $ThisAddress; echo $ThisAddress[1];?>" />
-					State: <input id="site_state" type="text"
+					State: <input id="site_state" title="Site state" type="text"
 					value="<?php global $ThisAddress; echo $ThisAddress[2];?>" />
-					Zip: <input id="site_zip" type="text"
+					Zip: <input id="site_zip" title="Site zip code" type="text"
 					title="If you use 9-digit zips, enter as 12345-6789."
 					value="<?php global $ThisAddress; echo $ThisAddress[3];?>" /></td>
 					<td>[CITY] [STATE] [ZIP]</td></tr>
-				<tr><td>Contact:</td><td><input id="site_contact" type="text"
+				<tr><td>Contact:</td><td><input id="site_contact" title="Site contact person" type="text"
 					value="<?php global $ThisContact; echo $ThisContact;?>" /></td>
 					<td>[CONTACT]</td></tr>
-				<tr><td>Appointment phone:</td><td><input id="site_phone" type="text"
+				<tr><td>Appointment phone:</td><td><input id="site_phone" title="Site phone for appointments" type="text"
 					title="Enter as 7 or 10 digits with dashes as 456-7890 or 123-456-7890"
 					value="<?php global $ThisAddress; echo $ThisAddress[4];?>" />
-					Email: <input id="site_email" type="email"
+					Email: <input id="site_email" title="Site email address for appointments or questions" type="email"
 					title="Enter as abcdef@ghi.klm"
 					value="<?php global $ThisAddress; echo $ThisAddress[5];?>" /></td>
 					<td>[PHONE] [EMAIL]</td></tr>
-				<tr><td>Website:</td><td><input id="site_website" type="url"
+				<tr><td>Website:</td><td><input id="site_website" title="Site website if there is one" type="url"
 					title="Enter as http://abcdef.ghi"
 					value="<?php global $ThisAddress; echo $ThisAddress[6];?>" /></td>
 					<td>[WEBSITE]</td></tr>
 				<tr><td>Email messages:
 					<span id="view_m_button"
-						<br /><br /><br /><button id="view_message_button" onclick="View_Message()">&nbsp;View&nbsp;</button></span>
+						<br /><button id="view_message_button" style="margin-top: 4em;" onclick="View_Message()">&nbsp;View&nbsp;</button></span>
 					</td>
 					<td colspan="2" id="site_email_optbox" onchange="Change_Site_Message();">
-						<input id="site_sendemail" type="checkbox" />
+						<input id="site_sendemail" title="Check box to send confirmation emails" type="checkbox" />
 						Send confirmation email if taxpayer has an email.
 						<span id="site_email_options">
-						<table style="width: 100%; margin-left: 1em;">
+						<table style="width: calc(100%-1em); margin-left: 1em;">
 							<tr><td colspan="2">
 								<input id="site_reminder_option" type="checkbox"
+								title="Check box to send reminder emails"
 									<?php global $ThisReminder; echo (($ThisReminder > 0) ? 'checked="checked"' : ''); ?> />
 								Send a reminder email
 								<input id="site_reminder" type="number"
+									title="Send this number of days prior to the appointment"
 									value="<?php global $ThisReminder; echo $ThisReminder; ?>" />
 								days prior to the appointment,
 								<br />&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;unless it&apos;s been
 								<input id="site_lastrem" type="number"
+									title="Wait for this long before sending another reminder message"
 									value="<?php global $ThisLastRem; echo $ThisLastRem; ?>" />
-								days since the last email.
+								days or less since the last email.
 								</td></tr>
 							<tr><td>
 								<!-- do not split the folowing line -->
-								<textarea id="site_message"><?php global $ThisMessage; $ThisMessage = str_replace("%%","\n",$ThisMessage); $ThisMessage = str_replace("&apos;","'",$ThisMessage);echo ($ThisMessage);?></textarea></td>
+								<textarea id="site_message"><?php global $ThisMessage; $ThisMessage = _Show_Chars($ThisMessage, "text"); echo ($ThisMessage);?></textarea></td>
 								<td>The message can contain any of the shortcodes listed above as well as the following:
 								<br /><br />[TPNAME] (Taxpayer&apos;s name(s))
 								<br />[DATE] [TIME] (Appointment date &amp; time)
-								<?php if ($_SESSION["SystemURL"]) echo "<br />[STATESITE] (State website)\n"; ?>
+								<?php
+								global $ThisAttach;
+								if ($_SESSION["SystemURL"]) echo "<br />[STATESITE] (State website)\n";
+								$ThisAttach = _Show_Chars($ThisAttach, "text");
+								echo "<input id=\"site_attach\" style=\"display: none;\" value=\"$ThisAttach\">";
+								List_Attachments();
+								 ?>
 								</td></tr>
 						</table></span></td></tr>
 				<tr><td>Site options:</td>
 					<td colspan="2" id="site_option_list">
 						<input id="site_sumres" type="checkbox" <?php global $ThisSumres; echo $ThisSumres; ?> />
 						Allow scheduling of reserved slots in Summary View (empty slots are always chosen first)
-						<br /><input id="site_10dig" type="checkbox" <?php global $This10dig; echo $This10dig; ?> />
-						Require 10-digit phone numbers (with optional toll prefix)</td></tr>
+						<br /><input id="site_10dig" type="checkbox" <?php global $This10dig; echo $This10dig; ?>
+						title = " " />
+						Require 10-digit phone numbers with optional toll prefix (recommended)</td></tr>
 				<tr><td>Internet access:
 					<span id="view_i_button"
-						<br /><br /><br /><br /><br /><br /><br /><br /><br /><br /><button id="view_instructions_button" onclick="View_Instructions()">&nbsp;View&nbsp;</button>
+						<br /><button id="view_instructions_button" style="margin-top: 12em;" onclick="View_Instructions()">&nbsp;View&nbsp;</button>
 					</span> </td>
 					<td colspan="2" id="site_clients_inet" onchange="Change_Other_Sites('');">
 						<input id="site_clients" type="checkbox" /> Allow internet taxpayers to make their own appointment.
@@ -3142,15 +3453,15 @@ function Test_For_Enter(id, e) {
 							<tr><td colspan="2">Additional instructions for the taxpayer for this site:</td></tr>
 							<tr>
 							<!-- do not split the folowing line -->
-							<td><textarea style="width:30em; height:12em;" id="site_instructions"><?php global $ThisInstructions; $ThisInstructions = str_replace("%%","\n",$ThisInstructions); $ThisInstructions = str_replace("&apos;","'",$ThisInstructions); echo $ThisInstructions;?></textarea></td>
+							<td><textarea id="site_instructions"><?php global $ThisInstructions; $ThisInstructions = _Show_Chars($ThisInstructions, "text"); echo $ThisInstructions;?></textarea></td>
 							<td>This message will be displayed after the general instructions on the taxpayer
 								self-appointment page.
-								<br /><br />Shortcodes are not supported in this message.
+								<br /><br />[TPNAME], [DATE] &amp; [TIME] shortcodes are not supported in this message.
 								<br /><br />Leave blank to omit the message.</td></tr>
 						</table>
 						</span></td></tr>
 				<tr><td>Other site access:</td>
-					<td colspan="2" id="site_others_access" onchange="Change_Other_Sites('');">
+					<td id="site_others_access" onchange="Change_Other_Sites('');">
 						<input id="site_others" type="checkbox" <?php global $OptionList; if ($OptionList) echo " checked"?> />
 							Allow other sites to view or schedule your taxpayers.
 						<span id="osite_list">
@@ -3162,6 +3473,7 @@ function Test_For_Enter(id, e) {
 						</span></td></tr>
 			</table>
 		</div>
+		</div> <!-- site_description -->
 
 	</div> <!-- site_options -->
 
@@ -3174,7 +3486,7 @@ function Test_For_Enter(id, e) {
 
 </div> <!-- site_page -->
 
-<!-- ================================= User Page ======================================== -->
+<!-- ================================= Site User Tab ======================================== -->
 
 <div id="user_page">
 
@@ -3193,17 +3505,19 @@ function Test_For_Enter(id, e) {
 
 		<div id="user_list_div">
 			<table id="user_list_table">
+				<tr><thead class="safe">
+					<th rowspan="2" class="sticky">
+					Name <?php global $MFlag; echo "<br />(<span id='optM'>$MFlag</span>&nbsp;=&nbsp;Home&nbsp;Site&nbsp;Appt&nbsp;Manager, <span id='optA'>$AFlag</span>&nbsp;=&nbsp;Administrator)"; ?></th>
+					<th rowspan="2" class="sticky">Role<br />at this site</th>
+					<th colspan="2" class="sticky">Callback List</th>
+					<th colspan="3" class="sticky">Appointments</th></tr>
 				<tr>
-				<th rowspan="2">Name <?php global $MFlag; echo "<br />(<span id='optM'>$MFlag</span>&nbsp;=&nbsp;Home&nbsp;Site&nbsp;Appt&nbsp;Manager, <span id='optA'>$AFlag</span>&nbsp;=&nbsp;Administrator)"; ?></th>
-					<th rowspan="2">Role<br />at this site</th>
-					<th colspan="2">Callback List</th>
-					<th colspan="3">Appointments</th></tr>
-				<tr>
-					<th>change</th>
-					<th>view</th>
-					<th>change</th>
-					<th>view</th>
-					<th>use&nbsp;res</th></tr>
+					<th class="sticky" style="top: 1.1em;">change</th>
+					<th class="sticky" style="top: 1.1em;">view</th>
+					<th class="sticky" style="top: 1.1em;">change</th>
+					<th class="sticky" style="top: 1.1em;">view</th>
+					<th class="sticky" style="top: 1.1em;">use&nbsp;res</th></tr>
+				</thead>
 				<?php
 				List_Users("Site");
 				?>
@@ -3216,42 +3530,48 @@ function Test_For_Enter(id, e) {
 
 
 
-<!-- ================================= Internet Page ======================================== -->
+<!-- ================================= Internet User Tab ======================================== -->
 
 <div id="internet_page">
-	<div id="inet_options" class="safe">
 
+	<div id="inet_options" class="safe">
 		<?php
 		global $SiteCurrent, $isAdministrator;
 		if (($SiteCurrent > 1) || ($isAdministrator)) {
+			echo "<div class='safe right' >";
 			echo "Delete taxpayers who have not signed in since <input id='inet_delete_date' type='date' />";
-			echo "<button onclick='Action_Request(\"DeleteUserByDate\");'> Delete </button>";
+			echo "<button onclick='Action_Request(\"DeleteUserByDate\");'> Delete </button></div>";
 		}
 		?>
 
 		<div id="inet_list_div">
-			<table id="inet_list_table" style="width: 100%;">
+			<table id="inet_list_table">
 				<?php
-				echo "<tr>\n";
-				echo "<th><span class=\"inet_sort\" onclick=\"Sort_INet('user_first');\">";
+				echo "<thead class='safe'><tr>\n";
+				echo "<th class='sticky'><span class='inet_sort' onclick=\"Sort_INet('user_first');\" ";
+				echo " title='Sort by first name'>";
 				echo ($_SESSION["UserSort"] == 'user_first') ? "&#x25bc;" : "&#x25bd;";
 				echo "</span>&nbsp;&nbsp;Name&nbsp;&nbsp;";
-				echo "<span class=\"inet_sort\" onclick=\"Sort_INet('user_last');\">";
+				echo "<span class='inet_sort' onclick=\"Sort_INet('user_last');\"";
+				echo " title='Sort by last name'>";
 				echo ($_SESSION["UserSort"] == 'user_last') ? "&#x25bc;" : "&#x25bd;";
 				echo "</span></th>\n";
-				echo "<th>Phone&nbsp;&nbsp;";
-				echo "<span class=\"inet_sort\" onclick=\"Sort_INet('user_phone');\">";
+				echo "<th class='sticky'>Phone&nbsp;&nbsp;";
+				echo "<span class=\"inet_sort\" onclick=\"Sort_INet('user_phone');\"";
+				echo " title='Sort by user phone number'>";
 				echo ($_SESSION["UserSort"] == 'user_phone') ? "&#x25bc;" : "&#x25bd;";
 				echo "</span></th>\n";
-				echo "<th>Email&nbsp;&nbsp;";
-				echo "<span class=\"inet_sort\" onclick=\"Sort_INet('user_email');\">";
+				echo "<th class='sticky'>Email&nbsp;&nbsp;";
+				echo "<span class=\"inet_sort\" onclick=\"Sort_INet('user_email');\"";
+				echo " title='Sort by user email'>";
 				echo ($_SESSION["UserSort"] == 'user_email') ? "&#x25bc;" : "&#x25bd;";
 				echo "</span></th>\n";
-				echo "<th>Last&nbsp;Used&nbsp;&nbsp;";
-				echo "<span class=\"inet_sort\" onclick=\"Sort_INet('user_lastlogin');\">";
+				echo "<th class='sticky'>Last&nbsp;Used&nbsp;&nbsp;";
+				echo "<span class=\"inet_sort\" onclick=\"Sort_INet('user_lastlogin');\"";
+				echo " title='Sort by last login date'>";
 				echo ($_SESSION["UserSort"] == 'user_lastlogin') ? "&#x25bc;" : "&#x25bd;";
 				echo "</span></th>\n";
-				echo "<th>Delete?</th></tr>\n";
+				echo "<th class='sticky'>Delete?</th></tr></thead>\n";
 				List_Users("Taxpayers");
 				?>
 			</table>
@@ -3265,7 +3585,7 @@ function Test_For_Enter(id, e) {
 <div id="user_information" style="display:<?php global $SiteAction; if ($SiteAction == "ViewUser") echo "block"; else echo "none"; ?>;">
 	<center>
 	<div id="old_user_header">
-		<b>User options for <span id="acc_user_list"><?php global $ThisFullName; echo str_replace("!", "'", $ThisFullName); ?></span></b>
+		<b>User options for <span id="acc_user_list"><?php global $ThisFullName; echo _Show_Chars($ThisFullName, "text"); ?></span></b>
 	</div>
 
 	<div id="new_user_header">
@@ -3279,24 +3599,24 @@ function Test_For_Enter(id, e) {
 		<table>
 			<tr><td>First Name:</td><td><input id="acc_first" type="text"
 				<?php global $ThisFirst, $ThisHome, $SiteUserHome, $isAdmiinistrator;
-				echo "value=\"" . str_replace("!", "'", $ThisFirst) . "\"";
+				echo "value=\"" . _Show_Chars($ThisFirst, "text") . "\"";
 				if (($ThisHome != $SiteUserHome) and ($ThisHome != 1) and (! $isAdministrator)) echo " disabled"; ?>
-				onchange="Change_User_Name();" />
+				onkeyup="Change_User_Name();" />
 				Last Name: <input id="acc_last" type="text"
 				<?php global $ThisLast, $ThisHome, $SiteUserHome, $isAdmiinistrator;
-				echo "value=\"" . str_replace("!", "'", $ThisLast) . "\"";
+				echo "value=\"" . _Show_Chars($ThisLast, "text") . "\"";
 				if (($ThisHome != $SiteUserHome) and ($ThisHome != 1) and (! $isAdministrator)) echo " disabled"; ?>
-				onchange="Change_User_Name();" /></td></tr>
+				onkeyup="Change_User_Name();" /></td></tr>
 			<tr><td>User Name:</td><td><input id="acc_name" type="text"
 				<?php global $ThisName, $ThisHome, $SiteUserHome, $isAdmiinistrator;
 				echo "value='" . $ThisName . "'";
 				if (($ThisHome != $SiteUserHome) and ($ThisHome != 1) and (! $isAdministrator)) echo " disabled"; ?>
-				onchange="Change_User_Name();" />
+				onkeyup="Change_User_Name();" />
 				Phone: <input id="acc_phone" type="text"
 				<?php global $ThisPhone, $ThisHome, $SiteUserHome, $isAdmiinistrator;
 				echo "value='" . $ThisPhone . "'";
 				if (($ThisHome != $SiteUserHome) and ($ThisHome != 1) and (! $isAdministrator)) echo " disabled"; ?>
-				onchange="Change_User_Name();" />
+				onkeyup="Change_User_Name();" />
 				</td></tr>
 			<tr><td>Password:</td><td><input id="acc_pass" type="text"
 				<?php global $ThisPass, $ThisHome, $SiteUserHome, $ThisUserOptions, $isAdministrator;
@@ -3304,7 +3624,7 @@ function Test_For_Enter(id, e) {
 					OR (($ThisUserOptions == "A") and (! $isAdministrator))) echo "style=' display:none;'";
 				echo " value='" . $ThisPass . "'";
 				?>
-				onchange="Change_User_Name();" />
+				onkeyup="Change_User_Name();" />
 			<tr><td>Email:</td><td><input id="acc_email" type="text"
 				<?php global $ThisFullName, $ThisEmail, $ThisHome, $SiteUserHome, $isAdministrator;
 				echo "value='" . $ThisEmail . "'";
@@ -3314,6 +3634,7 @@ function Test_For_Enter(id, e) {
 				echo "<button id='sendemail'><a href='mailto:$sendemail'>Send Email</a></button></td></tr>";
 				?>
 			<tr><td>Home Site:</td><td><select id="acc_home"
+				title="Select the user's home site"
 				onchange="Display_User_Buttons();">
 				<?php
 				List_Sites("users");
@@ -3368,6 +3689,7 @@ function Test_For_Enter(id, e) {
 	<br />Reminder: <input id="SiteReminder" name="SiteReminder" />
 	<br />LastRem: <input id="SiteLastRem" name="SiteLastRem" />
 	<br />Instructions: <input id="SiteInstructions" name="SiteInstructions" />
+	<br />Attachments: <input id="SiteAttach" name="SiteAttach" value="<?php global $SiteAttach; echo $SiteAttach;?>" />
 	<br />UserCurrent: <input id="UserCurrent" name="UserCurrent" value="<?php global $UserPreferred; echo $UserPreferred;?>" />
 	<br />UserF: <input id="UserFirst" name="UserFirst" />
 	<br />UserL: <input id="UserLast" name="UserLast" />
@@ -3379,8 +3701,10 @@ function Test_For_Enter(id, e) {
 	<br />UPass: <input id="UserPass" name="UserPass" />
 	<br />UOptions: <input id="UserOptions" name="UserOptions" />
 	<br />USort: <input id="UserSort" name="UserSort" />
-	<br />SGreet: <input id="SystemGreeting" name="SystemGreeting" />
-	<br />SNotice: <input id="SystemNotice" name="SystemNotice" />
+	<br />SGreet: <input id="SystemGreeting" name="SystemGreeting" value="<?php echo $_SESSION['SystemGreeting']; ?>" />
+	<br />SNotice: <input id="SystemNotice" name="SystemNotice" value="<?php echo $_SESSION['SystemNotice']; ?>" />
+	<br />SConfirm: <input id="SystemConfirm" name="SystemConfirm" value="<?php echo $_SESSION['SystemConfirm']; ?>" />
+	<br />SAttach: <input id="SystemAttach" name="SystemAttach" value="<?php echo $_SESSION['SystemAttach']; ?>" />
 	<br />SysURL: <input id="SystemURL" name="SystemURL" />
 	<br />SysEmail: <input id="SystemEmail" name="SystemEmail" />
 </form>

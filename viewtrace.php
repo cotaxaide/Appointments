@@ -24,6 +24,7 @@ function logfile_print() {
 	global $user_count;
 
 	// open the trace file
+	$raw_flag = false;
 	$getanother = 0;
 	$old_date = "";
 	$last_entry = "";
@@ -46,6 +47,16 @@ function logfile_print() {
 			$last_entry_count = 0;
 			$last_entry = $event_entry;
 		}
+
+		if (substr($event_entry, 0, 1) == "[") {
+			if ($raw_flag) @$user_record[$event_user] .= "</span>";
+			$raw_flag = false;
+		}
+		if ($raw_flag) {
+			@$user_record[$event_user] .= "<br />$event_entry";
+			continue;
+		}
+
 		$end_of_timestamp = strpos($event_entry, "]");
 		$event_timestamp[0] = $event_timestamp[1] = "";
 		$event_timestamp = explode(" ", substr($event_entry, 1, $end_of_timestamp - 2));
@@ -61,7 +72,7 @@ function logfile_print() {
 
 			// Start today's box
 			$old_date = $event_timestamp[0];
-			echo "\n\n<div class='daybox'><div>$old_date</div>";
+			echo "\n\n<div class='trace_daybox'><div>$old_date</div>";
 
 			// Clear yesterday's data
 			$user_record = [];
@@ -70,15 +81,18 @@ function logfile_print() {
 
 		// Parse the new record
 		if (strpos($event, "PHP ")) {
-			@$user_record[$event_user] .= "\n<br /><span class='errorbox' style='float: none;'>$event_timestamp[1]: $event</span>";
+			@$user_record[$event_user] .= "\n<br /><span class='trace_errorbox' style='float: none;'>$event_timestamp[1]: $event";
+			$raw_flag = true;
 			continue;
 		}
+		$event_module = $event_user = $event_data = "";
+		
 		$colon_location = strpos($event, ":");
 		$event_module = substr($event, 1, $colon_location - 1);
 		$comma_location = strpos($event, ",");
 		$event_user = trim(substr($event, $colon_location + 1, $comma_location - $colon_location - 1));
 		$event_data = trim(substr($event, $comma_location + 1));
-		//echo "\n<br />$event($event_module, $event_user, $event_data)";
+		//echo "\n<br />$event($event_module, $event_user, $event_data)"; // for debugging
 
 		// Add the event to the user record
 		switch ($event_module) {
@@ -107,6 +121,9 @@ function logfile_print() {
 		case "APPT":
 			@$user_record[$event_user] .= "\n<br />$event_timestamp[1]: [A] $event_data";
 			break;
+		case "EXPORT":
+			@$user_record[$event_user] .= "\n<br />$event_timestamp[1]: [A] $event_data";
+			break;
 		case "MANAGE":
 			@$user_record[$event_user] .= "\n<br />$event_timestamp[1]: [M] $event_data";
 			break;
@@ -120,10 +137,12 @@ function logfile_print() {
 			if (strstr($event_data, "reminders ran")) $event_data = "Reminders ran";
 			@$user_record["SYSTEM"] .= "\n<br />$event_timestamp[1]: $event_data";
 			break;
+		case "PHP Fatal error":
+			echo "\n<div class='errorbox'>@$event_timestamp[1]: $event";
+			$raw_flag = true;
+			break;
 		default:
 			// Show raw event
-			//echo "\n<div class='errorbox'>$event_timestamp[1] on $event_timestamp[0]";
-			//echo "\n<br />$event_module<br />User: $event_user<br />Event: $event_data</div>";
 			echo "\n<div class='errorbox'>@$event_timestamp[1]: $event</div>";
 		}
 
@@ -143,13 +162,13 @@ function show_all() {
 	asort($user_record);
 	foreach ($user_record as $j => $e) {
 		if ($j == "SYSTEM") {
-			$class = 'systembox';
+			$class = 'trace_systembox';
 		}
 		else if (strstr($e, "[A]") AND strstr($e, "=ViewUser")) {
-			$class = 'inetbox';
+			$class = 'trace_inetbox';
 		}
 		else {
-			$class = 'userbox';
+			$class = 'trace_userbox';
 		}
 
 		// Show the box
@@ -177,59 +196,6 @@ function show_box($c, $j, $e) {
 <meta name=description content="AARP Appointments">
 <link rel="SHORTCUT ICON" href="appt.ico">
 <link rel="stylesheet" href="appt.css">
-<style>
-	.daybox {
-		border: 2px solid black;
-		margin: 5px;
-		background-color: lavender;
-		font-size: 120%;
-		font-weight: bold;
-		text-align: center;
-		display: inline-block;
-		width: 100%;
-	}
-	.systembox,
-	.errorbox,
-	.inetbox,
-	.userbox {
-		border: 2px solid black;
-		margin: 0.5em;
-		background-color: palegreen;
-		text-align: left;
-		font-size: 80%;
-		font-weight: normal;
-		float: left;
-		padding: 3px;
-	}
-	.systembox {
-		background-color: yellow;
-	}
-	.inetbox {
-		background-color: blue;
-		color: white;
-	}
-	.errorbox {
-		border: 2px solid red;
-		background-color: hotpink;
-		color: white;
-	}
-	.userbox {
-		background-color: palegreen;
-	}
-	#ManageBox {
-		border: 3px solid green;
-		background-color: lightgreen;
-		position: fixed;
-		top: 5px;
-		right: 20px;
-		z-index: 2;
-	}
-	#ManageButton {
-		padding: 1em;
-		font-size: 120%;
-		font-weight: bold;
-	}
-</style>
 <script>
 	/* ******************************************************************************************************************* */
 	function Initialize() {
@@ -243,7 +209,7 @@ function show_box($c, $j, $e) {
 <div id="Main">
 	<div class="page_header">
 		<h1>Tax-Aide Appointments Error Log</h1>
-		<?php echo "You are signed in as " . str_replace("!", "&apos;", $_SESSION["UserFullName"]); ?>
+		<?php echo "You are signed in as " . str_replace("!", "&apos;", $_SESSION["UserFullName"]) . "\n"; ?>
 	</div>
 </div>
 
@@ -251,9 +217,9 @@ function show_box($c, $j, $e) {
 	<?php logfile_print(); ?>
 </div>
 
-<div id="ManageBox">
+<div id="trace_manage_box">
 	<a href="sitemanage.php">
-		<button id="ManageButton">Close log</button>
+		<button id="trace_close_log_button">Close log</button>
 	</a>
 </div>
 

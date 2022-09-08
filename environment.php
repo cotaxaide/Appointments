@@ -1,4 +1,8 @@
 <?php
+// Version 8.00
+// 	Changed NullDate from 0000-00-00 to 1900-01-01
+// Version 7.00
+// 	Added functions.php
 // Version 5.01
 
 // error_log("ENVIRON DEBUG: Starting environment.php");
@@ -52,7 +56,7 @@ if (! file_exists('crontab.txt')) {
 // Create a time stamp
 $TimeStamp = Date("Y-m-d H:i:s");
 $TodayDate = Date("Y-m-d");
-$NullDate = "0000-00-00";
+$NullDate = "1900-01-01";
 $NullTime = "00:00:00";
 
 // Define some globals
@@ -64,6 +68,8 @@ $USE_RES = 32;
 $ACCESS_ALL = $VIEW_CB + $ADD_CB + $VIEW_APP + $ADD_APP + $USE_RES;
 $MANAGER = 512;
 $ADMINISTRATOR = 1024;
+
+include "functions.php";
 
 // check for new version
 /*
@@ -103,10 +109,12 @@ if (isset($_SESSION["UserOptions"]) and ($_SESSION["UserOptions"] == "A")) {
 // SystemVersion
 // SystemGreeting
 // SystemNotice
+// SystemConfirm
 // SystemInfo (for future use)
 // SystemURL
 // SystemEmail
 // SystemReminders
+// SystemAttach
 // TRACE
 // SummaryAll
 // UserIndex

@@ -4,7 +4,31 @@
 // - creates the opendb.php file so that all php routines have access to the database
 
 //--------------------------------- VERSION HISTORY -----------------------------------
-$VERSION = "6.01";
+$VERSION = "8.02";
+//	PHP 8.1 changes to htmlspecialchars_decode to use ?? operator
+//$VERSION = "8.01";
+//	Removed underscores from default system email
+//	NullDate changed from 0000-00-00 to 1900-01-01 for strict databases
+//	Removed parameter from mysqli_connect_errno, not allowed in PHP v8.0
+//	Added system_confirm, system_
+	require_once "fixdbv8.php";
+//$VERSION = "7.05";
+//	Minor warning message correction
+//$VERSION = "7.04";
+//	Minor display issues
+//$VERSION = "7.03";
+//	Reminders not converting character coding
+//$VERSION = "7.02";
+//	Debugging messages cluttering trace
+//	Additional instructions not showing proper site
+//	Updated appointment.php, showslots.php, excelexport.php
+//$VERSION = "7.01";
+//	Make table headings sticky
+//	Prevent windows from hiding save/delete/etc buttons
+//	Moved character de/coding to seperate functions.php collections
+//	Moved appt list creation from appointment.php to showslots.php
+//	Updated index.php, sitemanage.php, appointment.php, excelexport.php
+//$VERSION = "6.01";
 //	Added a site-specific note to the self-appointment window
 //$VERSION = "5.02b";
 //	Updated appointment.php, reminders.php, viewtrace.php
@@ -44,7 +68,9 @@ $dbuserid = "";
 $dbpassword = "";
 $systemURL = "";
 $sysNotice = "";
+$sysConfirm = "";
 $errormessage = "";
+$NullDate = "1900-01-01";
 
 	// error_log("SETUP DEBUG: starting setup.php, Session ID = " . session_id());
 if (file_exists("opendb.php")) {
@@ -62,16 +88,32 @@ if (file_exists("opendb.php")) {
 	$_SESSION["SystemVersion"] = $row['system_version'];
 	$_SESSION["SystemGreeting"] = $row['system_greeting'];
 	$_SESSION["SystemNotice"] = $sysNotice = $row['system_notice'];
+	@$_SESSION["SystemConfirm"] = $sysConfirm = $row['system_confirm'];
+	@$_SESSION["SystemAttach"] = $row['system_attach'];
 	$_SESSION["SystemInfo"] = $row['system_info'];
 	$_SESSION["SystemURL"] = $systemURL = $row['system_url'];
 	$_SESSION["TRACE"] = $row['system_trace'];
 	// New in version 5.00
 	$system_email = (isset($row['system_email'])) ? $row['system_email'] : "" ;
-	if ($system_email == "") $system_email = "no_reply@tax_aide_reservations.no_email";
+	if (($system_email == "") || ($system_email = "no_reply@tax_aide_reservations.no_email")) {
+		$system_email = "do-not-reply@tax-aide-reservations.no-reply.email";
+	}
 	$_SESSION["SystemEmail"] = $system_email;
 	$_SESSION["SystemReminders"] = (isset($row['system_reminders'])) ? $row['system_reminders'] : "" ;
 	if ($_SESSION["SystemVersion"] != $VERSION) {
 		Configure_Database();
+		// New in version 8.00
+		if ($_SESSION["SystemVersion"] < "8.00") {
+			$query = "UPDATE $APPT_TABLE SET";
+			$query .= " `appt_date` = '$NullDate'";
+			$query .= " WHERE `appt_date` = '0000-00-00'";
+			mysqli_query($dbcon, $query);
+			$query = "UPDATE $APPT_TABLE SET";
+			$query .= " `appt_emailsent` = '$NullDate'";
+			$query .= " WHERE `appt_emailsent` = '0000-00-00'";
+			$query .= " OR `appt_emailsent` IS NULL";
+			mysqli_query($dbcon, $query);
+		}
 		if ($_SESSION["TRACE"]) error_log("SETUP: Database updated from version " . $_SESSION["SystemVersion"] . " to $VERSION.");
 		exit("Your database has been updated from version " . $_SESSION["SystemVersion"] . " to $VERSION.\n\nPlease close your browser and restart the appointment system.");
 		}
@@ -140,6 +182,8 @@ Configure_Table($SYSTEM_TABLE, "system_index", "INT AUTO_INCREMENT PRIMARY KEY")
 Configure_Column($SYSTEM_TABLE, "system_version", "VARCHAR(50)");
 Configure_Column($SYSTEM_TABLE, "system_greeting", "TEXT");
 Configure_Column($SYSTEM_TABLE, "system_notice", "TEXT");
+Configure_Column($SYSTEM_TABLE, "system_confirm", "TEXT");
+Configure_Column($SYSTEM_TABLE, "system_attach", "TEXT");
 Configure_Column($SYSTEM_TABLE, "system_info", "TEXT");
 Configure_Column($SYSTEM_TABLE, "system_url", "TEXT");
 Configure_Column($SYSTEM_TABLE, "system_email", "TEXT");
@@ -174,6 +218,7 @@ Configure_Column($SITE_TABLE, "site_address", "TEXT");
 Configure_Column($SITE_TABLE, "site_inet", "TEXT");
 Configure_Column($SITE_TABLE, "site_contact", "TEXT");
 Configure_Column($SITE_TABLE, "site_message", "TEXT");
+Configure_Column($SITE_TABLE, "site_attach", "TEXT");
 Configure_Column($SITE_TABLE, "site_addedby", "BIGINT");
 Configure_Column($SITE_TABLE, "site_open", "DATE");
 Configure_Column($SITE_TABLE, "site_closed", "DATE");
@@ -186,12 +231,12 @@ Configure_Column($SITE_TABLE, "site_10dig", "TEXT");
 
 global $APPT_TABLE;
 Configure_Table($APPT_TABLE, "appt_no", "BIGINT AUTO_INCREMENT PRIMARY KEY");
-Configure_Column($APPT_TABLE, "appt_date", "DATE");
+Configure_Column($APPT_TABLE, "appt_date", "DATE DEFAULT '1900-01-01'");
 Configure_Column($APPT_TABLE, "appt_time", "TIME");
 Configure_Column($APPT_TABLE, "appt_name", "TEXT");
 Configure_Column($APPT_TABLE, "appt_location", "BIGINT");
 Configure_Column($APPT_TABLE, "appt_email", "VARCHAR(256)");
-Configure_Column($APPT_TABLE, "appt_emailsent", "DATE");
+Configure_Column($APPT_TABLE, "appt_emailsent", "DATE DEFAULT '1900-01-01'");
 Configure_Column($APPT_TABLE, "appt_phone", "VARCHAR(50)");
 Configure_Column($APPT_TABLE, "appt_tags", "TEXT");
 Configure_Column($APPT_TABLE, "appt_need", "TEXT");
@@ -251,30 +296,19 @@ function Update_Version() {
 	global $systemURL;
 	global $dbcon;
 	global $system_email;
-	$sysNotice = Notice();
+	global $sysConfirm;
+	global $sysNotice;
 
 	$query = "INSERT INTO $SYSTEM_TABLE";
 	$query .= " SET `system_index` = 1";
 	$query .= ", `system_version` = '$VERSION'";
 	$query .= ", `system_email` = '$system_email'";
 	$query .= ", `system_notice` = '$sysNotice'";
+	$query .= ", `system_confirm` = '$sysConfirm'";
 	$query .= ", `system_url` = '$systemURL'";
 	$query .= " ON DUPLICATE KEY";
 	$query .= " UPDATE `system_version` = '$VERSION'";
 	mysqli_query($dbcon, $query);
-}
-
-//----------------------------------------------------------------------------
-function Notice() {
-//----------------------------------------------------------------------------
-	$sysNotice = (isset($_SESSION["SystemNotice"])) ? $_SESSION["SystemNotice"] : "" ;
-
-	if ($sysNotice = "") {
-		$sysNotice = "AARP reservations are now closed for this year.\n";
-		$sysNotice .= "<br />";
-		$sysNotice .= "Please come back when we re-open next January.\n";
-	}
-	return $sysNotice;
 }
 
 //----------------------------------------------------------------------------
@@ -300,7 +334,7 @@ function Create_Opendb_File($host, $dbuserid, $dbpassword, $dbname) {
 
 	fwrite($fileptr, "//Connecting to your database\n");
 	fwrite($fileptr, $ds . "dbcon = mysqli_connect(" . $ds . "hostname, " . $ds . "username, " . $ds . "dbpassword, " . $ds . "dbname);\n");
-	fwrite($fileptr, "if (mysqli_connect_errno(" . $ds . "dbcon)) DIE (\"Unable to connect to database! (\" . mysqli_connect_error() . \")\");\n");
+	fwrite($fileptr, "if (mysqli_connect_errno()) DIE (\"Unable to connect to database! (\" . mysqli_connect_error() . \")\");\n");
 	fwrite($fileptr, "mysqli_select_db(" . $ds . "dbcon, " . $ds . "dbname);\n\n");
 	fwrite($fileptr, "date_default_timezone_set('" . $dbtimezone . "');\n\n");
 	// fwrite($fileptr, "require_once \"session.php\";\n"); // removed in version 5.00
@@ -327,8 +361,8 @@ function Add_Admin($admin_sitename, $admin_first, $admin_last, $admin_email, $ad
 	$query .= ", `site_contact` = ''";
 	$query .= ", `site_message` = ''";
 	$query .= ", `site_addedby` = 0";
-	$query .= ", `site_open` = '0000-00-00'";
-	$query .= ", `site_closed` = '0000-00-00'";
+	$query .= ", `site_open` = '$NullDate'";
+	$query .= ", `site_closed` = '$NullDate'";
 	$query .= ", `site_help` = ''";
 	$query .= ", `site_sumres` = ''";
 	$query .= ", `site_10dig` = ''";
@@ -342,8 +376,8 @@ function Add_Admin($admin_sitename, $admin_first, $admin_last, $admin_email, $ad
 	$query .= ", `site_contact` = ''";
 	$query .= ", `site_message` = ''";
 	$query .= ", `site_addedby` = 0";
-	$query .= ", `site_open` = '0000-00-00'";
-	$query .= ", `site_closed` = '0000-00-00'";
+	$query .= ", `site_open` = '$NullDate'";
+	$query .= ", `site_closed` = '$NullDate'";
 	$query .= ", `site_help` = ''";
 	$query .= ", `site_sumres` = ''";
 	$query .= ", `site_10dig` = ''";

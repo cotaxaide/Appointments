@@ -1,4 +1,9 @@
 <?php
+// Version 8.01
+// 	Better checking and error handling of new user sign-up input fields
+// Version 7.01
+// 	Now using function js and php files
+// 	Uncommented session clearing statements to make "logged in" name go away
 // Version 5.02a
 // 	Prevent restartup without password on same PC
 // 	Do not save password on PC with cookie, only userid
@@ -45,9 +50,9 @@ $sysnotice = "";
 $query = "SELECT * FROM $SYSTEM_TABLE";
 $sys = mysqli_query($dbcon, $query);
 while ($row = mysqli_fetch_array($sys)) {
-	$_SESSION["SystemGreeting"] = $sysgreeting = htmlspecialchars_decode($row['system_greeting']);
-	$_SESSION["SystemNotice"] = $sysnotice = htmlspecialchars_decode($row['system_notice']);
-	$_SESSION["SystemURL"] = $sysURL = htmlspecialchars_decode($row['system_url']);
+	$_SESSION["SystemGreeting"] = $sysgreeting = $row['system_greeting'];
+	$_SESSION["SystemNotice"] = $sysnotice = $row['system_notice'];
+	$_SESSION["SystemURL"] = $sysURL = htmlspecialchars_decode($row['system_url'] ?? '');
 	$_SESSION["SystemVersion"] = $row['system_version'];
 	$_SESSION["TRACE"] = $row['system_trace'];
 
@@ -68,7 +73,7 @@ $locs = mysqli_query($dbcon, $query);
 while ($row = mysqli_fetch_array($locs)) {
 	if ($row['site_closed'] >= $TodayDate) {
 		$LocationList[0] = ++$j;
-		$LocationList[$j] = htmlspecialchars_decode($row["site_name"]);
+		$LocationList[$j] = htmlspecialchars_decode($row["site_name"] ?? '');
 		$LocationInternet[$j] = $row["site_inet"];
 		$LocationOpen[$j] = $row["site_open"];
 		$LocationClosed[$j] = $row["site_closed"];
@@ -181,6 +186,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
 	else { // User is not signed in
 
+		$_SESSION["UserFullName"] = "";
+
 		// Look for a matching email
 		$query = "SELECT * FROM $USER_TABLE";
 		$query .= " WHERE `user_email` = '$FormLoginEmail'";
@@ -197,8 +204,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 				//$_SESSION["UserLast"] = $UserLast;
 				$_SESSION["UserName"] = $UserName = $id['user_name'];
 				$_SESSION["UserFullName"] = $UserFirst . " " . $UserLast;
-				$_SESSION["UserHome"] = $UserHome = $id['user_home'];
 				$_SESSION["UserOptions"] = $UserOptions = $id['user_options'];
+				$_SESSION["UserHome"] = $UserHome = ($UserOptions) ? $id['user_home'] : 0;
 				$_SESSION["UserEmail"] = $UserEmail = $id['user_email'];
 				$_SESSION["UserPhone"] = $UserPhone = $id['user_phone'];
 				if ($UserHome == 0) { // is an internet user
@@ -349,9 +356,11 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 }
 
 else { // Initial access with no action yet taken
-	$UserIndex = 0;
-	$UserOptions = 0;
-	$UserIdentified = false;
+	if (! $UserIdentified) {
+		$UserIndex = 0;
+		$UserOptions = 0;
+		$UserIdentified = false;
+	}
 }
 
 // -----------------------------------------------------------------------------
@@ -431,11 +440,16 @@ function Unique_Email($testId, $testEmail) {
 		?>
 
 		// Read login cookies if present
-		Read_Cookie();
-		if (!LoginName0.value) LoginName0.focus();
-		else LoginPass0.focus();
-		// Was LoginName remembered
-		LoginRememberMe.checked = (c0);
+		var cookie = _Read_Cookies();
+		if (typeof cookie["TA_Appt_0"] === "undefined") {
+			LoginName0.focus();
+			LoginRememberMe.checked = false;
+		}
+		else {
+			LoginName0.value = c0 = cookie["TA_Appt_0"];
+			LoginRememberMe.checked = true;
+			LoginPass0.focus();
+		}
 	}
 
 	/* ******************************************************************************************************************* */
@@ -448,8 +462,8 @@ function Unique_Email($testId, $testEmail) {
 	/* ******************************************************************************************************************* */
 	function Change_Option(id) {
 	/* ******************************************************************************************************************* */
-		if (id != "login") init_message.innerHTML = "";
-		if (id != "login") error_message.innerHTML = "";
+		if (id != "login") init_error.innerHTML = "";
+		else if (id != "login") init_message.innerHTML = "";
 		newinit_data.style.display = (id == "newuser") ? "block" : "none"; 
 		chgpw_data.style.display = (id == "chgpw") ? "block" : "none"; 
 		chgem_data.style.display = (id == "chgem") ? "block" : "none"; 
@@ -489,94 +503,118 @@ function Unique_Email($testId, $testEmail) {
 	/* ******************************************************************************************************************* */
 		if (DEBUG) alert (Action);
 		switch (Action) {
-			case "Login":
-				if (LoginName0.value == "" || LoginPass0.value == "") {
-					alert("Please enter both email and password");
-					return;
-				}
-				LoginForm.LoginEmail.value = LoginName0.value;
-				LoginForm.LoginPass.value = LoginPass0.value;
-				Set_Cookie();
-				break;
-			case "NewUser":
-				if (LoginFName1.value == "") {
-					alert("Please enter your first name.");
-					return;
-				}
-				if (LoginLName1.value == "") {
-					alert("Please enter your last name.");
-					return;
-				}
-				if (_Verify_Email(LoginEmail1.value, "alert")[0]) return;
+		case "Login":
+			if (LoginName0.value == "" || LoginPass0.value == "") {
+				alert("Please enter both email and password");
+				return;
+			}
+			LoginForm.LoginEmail.value = LoginName0.value;
+			LoginForm.LoginPass.value = LoginPass0.value;
+			var cValue = (LoginRememberMe.checked) ? LoginName0.value : "" ;
+			_Set_Cookie("TA_Appt_0", cValue);
+			break;
+
+		case "NewUser":
+			result = _Verify_Name(LoginFName1.value, "alert");
+			switch (result[0]) {
+			case 0: LoginFName1.value = result[1]; break;
+			case 1: alert("Please enter your first name."); return;
+			case 2: return;
+			}
+
+			result = _Verify_Name(LoginLName1.value, "alert");
+			switch (result[0]) {
+			case 0: LoginLName1.value = result[1]; break;
+			case 1: alert("Please enter your last name."); return;
+			case 2: return;
+			}
+
+			result = _Verify_Email(LoginEmail1.value, "alert");
+			switch (result[0]) {
+			case 0: LoginEmail1.value = result[1]; break;
+			case 1: alert("Please enter your email."); return;
+			case 2: return;
+			}
+
+			result = _Verify_Phone(LoginPhone1.value, "alert", "10-dig");
+			switch (result[0]) {
+			case 0: LoginPhone1.value = result[1]; break;
+			case 1: alert("Please enter your phone number."); return;
+			case 2: return;
+			}
 				
-				result = _Verify_Phone(LoginPhone1.value, "alert", "10-dig");
-				if (result[0]) return; // bad phone number
-				LoginForm.LoginPhone.value = LoginPhone1.value = result[1];
+			if ((LoginPass1a.value == "") || (LoginPass1b.value == "")) {
+				alert ("Please enter your password, twice.");
+				return;
+			}
+			if (LoginPass1a.value != LoginPass1b.value) {
+				alert("Password entries don't match");
+				return;
+			}
 				
-				if ((LoginPass1a.value == "") || (LoginPass1b.value == "")) {
-					alert ("Please enter your password, twice.");
-					return;
-				}
-				if (LoginPass1a.value != LoginPass1b.value) {
-					alert("Password entries don't match");
-					return;
-				}
-					
-				LoginForm.LoginPass.value = LoginPass1a.value;
-				LoginForm.LoginFirst.value = Clean_Name(LoginFName1.value);
-				LoginForm.LoginLast.value = Clean_Name(LoginLName1.value);
-				LoginForm.LoginName.value = LoginForm.LoginFirst.value.replace(/[\s!]/g,"") + LoginLName1.value.substr(0,1);
-				LoginForm.LoginEmail.value = LoginEmail1.value;
-				break;
-			case "GetPW":
-				LoginForm.LoginEmail.value = LoginGetPWEmail.value;
-				break;
-			case "ChangePW":
-				if (LoginPass2a.value == "") {
-					alert("New password cannot be blank");
-					return;
-				}
-				if (LoginPass2a.value != LoginPass2b.value) {
-					alert("New password entries don't match");
-					LoginPass2a.value = "";
-					LoginPass2b.value = "";
-					return;
-				}
-				LoginPass0.value = LoginForm.LoginName.value = LoginPass2a.value;
-				Set_Cookie();
-				break;
-			case "ChangeEmail":
-				if (LoginEmail3a.value == "") {
-					alert("You must enter a new email");
-					return;
-				}
-				if (LoginEmail3a.value != LoginEmail3b.value){
-					alert("Your email entries must match");
-					return;
-				}
-				results = _Verify_Email(LoginEmail3a.value, "alert");
-				if (results[0]) return; // bad email
-				LoginForm.LoginEmail.value = LoginEmail3a.value = results[1];
-				break;
-			case "ChangePhone":
-				results = _Verify_Phone(LoginPhone3.value, "alert", "10-dig");
-				if (results[0]) return; // bad phone
-				LoginForm.LoginPhone.value = LoginPhone3.value = results[1];
-				break;
-			case "LogOut":
-				break;
-			case "CanAppt":
-				LoginForm.action = "<?php global $gotophp; echo $gotophp; ?>";
-				break;
-			case "Site":
-				$gotophp = "sitemanage.php";
-				LoginForm.action = "sitemanage.php";
-				break;
-			case "Appt":
-				$gotophp = "appointment.php";
-				LoginForm.action = "appointment.php";
-				break;
-		}
+			LoginForm.LoginPass.value = LoginPass1a.value;
+			LoginForm.LoginFirst.value = _Clean_Chars(LoginFName1.value);
+			LoginForm.LoginLast.value = _Clean_Chars(LoginLName1.value);
+			LoginForm.LoginName.value = LoginForm.LoginFirst.value + LoginLName1.value.substr(0,1);
+			LoginForm.LoginEmail.value = LoginEmail1.value;
+			LoginForm.LoginPhone.value = LoginPhone1.value;
+			break;
+
+		case "GetPW":
+			LoginForm.LoginEmail.value = LoginGetPWEmail.value;
+			break;
+
+		case "ChangePW":
+			if (LoginPass2a.value == "") {
+				alert("New password cannot be blank");
+				return;
+			}
+			if (LoginPass2a.value != LoginPass2b.value) {
+				alert("New password entries don't match");
+				LoginPass2a.value = "";
+				LoginPass2b.value = "";
+				return;
+			}
+			LoginPass0.value = LoginForm.LoginName.value = LoginPass2a.value;
+			break;
+
+		case "ChangeEmail":
+			if (LoginEmail3a.value == "") {
+				alert("You must enter a new email");
+				return;
+			}
+			if (LoginEmail3a.value != LoginEmail3b.value){
+				alert("Your email entries must match");
+				return;
+			}
+			results = _Verify_Email(LoginEmail3a.value, "alert");
+			if (results[0]) return; // bad email
+			LoginForm.LoginEmail.value = LoginEmail3a.value = results[1];
+			break;
+
+		case "ChangePhone":
+			results = _Verify_Phone(LoginPhone3.value, "alert", "10-dig");
+			if (results[0]) return; // bad phone
+			LoginForm.LoginPhone.value = LoginPhone3.value = results[1];
+			break;
+
+		case "LogOut":
+			break;
+
+		case "CanAppt":
+			LoginForm.action = "<?php global $gotophp; echo $gotophp; ?>";
+			break;
+
+		case "Site":
+			$gotophp = "sitemanage.php";
+			LoginForm.action = "sitemanage.php";
+			break;
+
+		case "Appt":
+			$gotophp = "appointment.php";
+			LoginForm.action = "appointment.php";
+			break;
+		} // end switch
 
 		LoginForm.LoginAction.value = Action;
 		if (DEBUG) alert(Action + " being submitted");
@@ -609,45 +647,6 @@ function Unique_Email($testId, $testEmail) {
 	}
 	
 	//===========================================================================================
-	function Set_Cookie() {
-	//===========================================================================================
-		// Is the RememberMe box checked or unchecked?
-		if (LoginRememberMe.checked) {
-			var d = new Date(); // set cookie expiration date
-				d.setTime(d.getTime() + (2.2*366*24*60*60*1000)); // 2.2 years
-			var CookieExpires = "expires=" + d.toUTCString() + ";";
-			c0 = LoginName0.value + ';';
-			//c1 = LoginPass0.value + ';';
-			c1=';';
-		}
-		else {
-			CookieExpires = "expires=Thu, 01 Jan 1970 00:00:00 GMT;"; // unchecked
-			c0=';';
-			c1=';';
-		}
-
-		document.cookie = "TA_Appt_0=" + c0 + CookieExpires + " path=/;";
-		// erase previously stored password cookie
-		CookieExpires = "expires=Thu, 01 Jan 1970 00:00:00 GMT;";
-		document.cookie = "TA_Appt_1=" + c1 + CookieExpires + " path=/;";
-	}
-
-	//===========================================================================================
-	function Read_Cookie() {
-	//===========================================================================================
-		var cookie = document.cookie;
-		var cookieList = cookie.split(";");
-		for (cookieIdx = 0; cookieIdx < cookieList.length; cookieIdx++) {
-			var cn = cookieList[cookieIdx];
-			while (cn.charAt(0)==' ') cn = cn.substring(1);
-			var cookieVar = cn.split("=");
-			if (cookieVar[0] == "TA_Appt_0") LoginName0.value = c0 = cookieVar[1];
-			//if (cookieVar[0] == "TA_Appt_1") LoginPass0.value = c1 = cookieVar[1];
-			LoginPass0.value = "";
-		}
-	}
-
-	//===========================================================================================
 	function Show_History() {
 	//===========================================================================================
 		change_history.style.display = (change_history.style.display == 'none') ? 'block' : 'none';
@@ -664,7 +663,9 @@ function Unique_Email($testId, $testEmail) {
 <div id="Main">
 	<div class="page_header">
 		<h1>Tax-Aide Appointments</h1>
-		<?php if ($UserIdentified) echo "You are signed in as " . str_replace("!", "&apos;", $_SESSION["UserFullName"]); ?>
+		<?php if ((isset($_SESSION["UserFullName"]) AND ($_SESSION["UserFullName"]) != "")) {
+			echo "You are signed in as " . _Show_Chars($_SESSION["UserFullName"], "text");
+			}?>
 	</div>
 </div>
 
@@ -682,14 +683,20 @@ function Unique_Email($testId, $testEmail) {
 <hr />
 
 <div id="init_main">
-<table id="layouttbl"><tr>
+<table id="init_table"><tr>
 <td id="info_block">
 	
-	<div id="aarp_foundation">
-		<?php global $sysgreeting; echo $sysgreeting; ?>
+	<div id="init_greeting">
+		<?php
+			if (isset($_SESSION["SystemGreeting"])) {
+				$g = _Show_Chars($_SESSION["SystemGreeting"], "html");
+				$g = str_replace("&quot;", '"', $g); // Change to real quotes here.
+				echo $g;
+			}
+		?>
 	</div>
 
-	<div id="sitelist">
+	<div id="init_sitelist">
 		<?php
 		global $LocationList;
 		if ($LocationList[0] != 0) {
@@ -715,7 +722,7 @@ function Unique_Email($testId, $testEmail) {
 
 		<div id="init_login" class="init_option">
 			<table><tr>
-				<td><img src="Images/opendoor.png" style="width:5em; cursor: pointer;" id="login" onclick="Action_Request('Login')"></td>
+				<td><img src="Images/opendoor.png" style="width:5em; cursor: pointer;" id="Login_image" onclick="Action_Request('Login')"></td>
 				<td style="text-align: center;">Sign In
 					<table id="newlogin_data" class="init_data">
 					<tr><td>Email: </td><td><input type="email" id="LoginName0" onchange="Change_Login(this.value);" /></td></tr>
@@ -771,11 +778,11 @@ function Unique_Email($testId, $testEmail) {
 		
 		<table style="cursor: pointer;">
 		<tr id="init_appt" class="init_option" onclick="Action_Request('Appt');">
-			<td><img src="Images/makeappt.png" style="width: 4em;" id="Appt"></td>
+			<td><img src="Images/makeappt.png" style="width: 4em;"></td>
 			<td style="vertical-align: middle;">Make or Change appointments</td></tr>
 
 		<tr id="init_site" class="init_option" onclick="Action_Request('Site');">
-			<td><img src="Images/options.png" style="width: 4em;" id="Site"></td>
+			<td><img src="Images/options.png" style="width: 4em;"></td>
 			<td style="vertical-align: middle;">Manage options and permissions</td></tr>
 		</table>
 		
@@ -825,7 +832,7 @@ function Unique_Email($testId, $testEmail) {
 	</div> <!-- user-option-box -->
 
 <span id="init_message"><?php global $Usermessage; if ($Usermessage != "") echo "<br />$Usermessage\n"; ?></span>
-<span id="error_message"><?php global $Errormessage; if ($Errormessage != "") echo "<br />$Errormessage\n"; ?></span>
+<span id="init_error"><?php global $Errormessage; if ($Errormessage != "") echo "<br />$Errormessage\n"; ?></span>
 </td>
 </table>
 
@@ -833,7 +840,7 @@ function Unique_Email($testId, $testEmail) {
 	global $sysnotice;
 	if ($sysnotice) {
 		echo "<div id=\"sysnotice\">\n";
-		echo $sysnotice;
+		echo _Show_Chars($sysnotice, "html");
 		echo "\n</div>\n";
 	}
 ?>

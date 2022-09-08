@@ -1,4 +1,10 @@
 <?PHP
+//Version 8.01
+//	Added year to reminder timestamp (system_reminders)
+//	Added attachments imbedded in email text message
+//	Corrected error preventing reminder message being sent
+//Version 5.02e
+//	Added _Show_Chars()
 //Version 5.02d
 //	Fix 5.02c
 //Version 5.02c
@@ -30,9 +36,8 @@ while($row = mysqli_fetch_array($sites)) {
 
 	$days = $row["site_reminder"];
 	$sd = "";
-	if ($days) {
-		$sd = strtotime("+" . $row["site_reminder"] . " days", time());
-	}
+	if ($days == "") $days = 0;
+	$sd = strtotime("+" . $row["site_reminder"] . " days", time());
 	$siteReminder[$siteIndex] = $sd;
 	$siteLastRem[$siteIndex] = intval($row["site_lastrem"]) + 1;
 
@@ -45,6 +50,22 @@ while($row = mysqli_fetch_array($sites)) {
 	$sitePhone[$siteIndex] = $sa[4];
 	$siteEmail[$siteIndex] = $sa[5];
 	$siteWeb[$siteIndex] = $sa[6];
+
+	// Create the email attachment text for this site
+	$SiteAttachList = $row["site_attach"];
+	$SystemAttachList = explode("|", $_SESSION["SystemAttach"]);
+	$la = "";
+	if ($SiteAttachList) {
+		$break = "";
+		for ($lax = 0; $lax < sizeof($SystemAttachList)-1; $lax++) {
+			$sap = explode("=", $SystemAttachList[$lax]);
+			if (strpos($SiteAttachList, $sap[0]) !== false) {
+				$la .= "$break - $sap[0] ($sap[1])";
+				$break = "\n";
+			}
+		}
+	}
+	$siteAttach[$siteIndex] = $la;
 }
 
 // Get each appointment and see if an email needs to be sent
@@ -61,11 +82,11 @@ while($row = mysqli_fetch_array($appointments)) {
 
 	// See if the site is set up to send the email
 	$siteIndex = "S" . $row["appt_location"];
-	$graceDate = strtotime("-" . $siteLastRem[$siteIndex] . " days");
 	if ($siteMessage[$siteIndex] == "") continue; // site messaging not enabled
 	if ($siteReminder[$siteIndex] == "") continue; // site reminder not enabled
-	if ($apptDate >= $siteReminder[$siteIndex]) continue; // not time to send yet
+	if ($apptDate < $siteReminder[$siteIndex]) continue; // not time to send yet
 	$apptSent = strtotime($row["appt_emailsent"]);
+	$graceDate = strtotime("-" . $siteLastRem[$siteIndex] . " days");
 	if ($apptSent > $graceDate) continue; // already sent recently
 
 	// OK to send email
@@ -73,37 +94,39 @@ while($row = mysqli_fetch_array($appointments)) {
 	$apptIndex = $row["appt_no"];
 	$apptDate = date("D, M j Y", $apptDate);
 	$apptTime = date("g:i a", strtotime($row["appt_time"]));
-	$apptName = str_replace("!", "'", htmlspecialchars_decode($row["appt_name"]));
+	$apptName = str_replace("!", "'", htmlspecialchars_decode($row["appt_name"] ?? ''));
 	$apptName = str_replace("&amp;", "&", $apptName);
 
 	$to = $apptEmail;
 
 	$from = (isset($siteEmail[$siteIndex]) AND ($siteEmail[$siteIndex] != "")) ? $siteEmail[$siteIndex] : $_SESSION['SystemEmail'];
-	/*if ($from == "")*/ $from = "no-reply@tax-aide-reminder.no-email";
-	$from = htmlspecialchars_decode($from);
+	$from = htmlspecialchars_decode($from ?? '');
 
 	$headers = "From: " . $siteName[$siteIndex] . " Tax-Aide <" . $from . ">";
 
 	$subject = "Your Tax-Aide appointment";
 
-	$message = htmlspecialchars_decode($siteMessage[$siteIndex]);
-	$message = str_replace("&apos;", "'", $message);
-	$message = str_replace("&amp;", "&", $message);
-	$message = str_replace("%%", "\n", $message);
-	$message = str_replace("[TPNAME]", $apptName, $message);
-	$message = str_replace("[TIME]", $apptTime, $message);
-	$message = str_replace("[DATE]", $apptDate, $message);
-	$message = str_replace("[SITENAME]", $siteName[$siteIndex], $message);
-	$message = str_replace("[ADDRESS]", $siteAddress[$siteIndex], $message);
-	$message = str_replace("[CITY]", $siteCity[$siteIndex], $message);
-	$message = str_replace("[STATE]", $siteState[$siteIndex], $message);
-	$message = str_replace("[ZIP]", $siteZip[$siteIndex], $message);
-	$message = str_replace("[PHONE]", $sitePhone[$siteIndex], $message);
-	$message = str_replace("[EMAIL]", $siteEmail[$siteIndex], $message);
-	$message = str_replace("[WEBSITE]", $siteWeb[$siteIndex], $message);
-	$message = str_replace("[STATESITE]", $_SESSION['SystemURL'], $message);
-	$message = str_replace("[CONTACT]", $siteContact[$siteIndex], $message);
-	//$message = wordwrap($message, 70, "\r\n");
+	$message = _Show_Chars($siteMessage[$siteIndex], "text");
+	$message = str_replace("[TPNAME]",      _Show_Chars($apptName, "text"), $message);
+	$message = str_replace("[TIME]",        $apptTime, $message);
+	$message = str_replace("[DATE]",        $apptDate, $message);
+	$message = str_replace("[SITENAME]",    $siteName[$siteIndex], $message);
+	$message = str_replace("[ADDRESS]",     $siteAddress[$siteIndex], $message);
+	$message = str_replace("[CITY]",        $siteCity[$siteIndex], $message);
+	$message = str_replace("[STATE]",       $siteState[$siteIndex], $message);
+	$message = str_replace("[ZIP]",         $siteZip[$siteIndex], $message);
+	$message = str_replace("[PHONE]",       $sitePhone[$siteIndex], $message);
+	$message = str_replace("[EMAIL]",       $siteEmail[$siteIndex], $message);
+	$message = str_replace("[WEBSITE]",     $siteWeb[$siteIndex], $message);
+	$message = str_replace("[STATESITE]",   $_SESSION['SystemURL'], $message);
+	$message = str_replace("[CONTACT]",     $siteContact[$siteIndex], $message);
+	$message = str_replace("[ATTACHMENTS]", $siteAttach[$siteIndex], $message);
+	for ($lax = 0; $lax < sizeof($SystemAttachList)-1; $lax++) {
+		$sap = explode("=", $SystemAttachList[$lax]);
+		$testShortcode = "[$sap[0]]";
+		$replacement = "$sap[0] ($sap[1])";
+		$message = str_replace($testShortcode, $replacement, $message);
+	}
 
 	$success = mail($to,$subject,$message,$headers);
 	if (! $success) {
@@ -126,7 +149,7 @@ while($row = mysqli_fetch_array($appointments)) {
 }
 
 // update reminder run time
-$sysremTime = date("m/d \a\\t h:i a");
+$sysremTime = date("m/d/y \a\\t h:i a");
 if ($_SESSION['TRACE']) error_log("REMIND: SYSTEM, reminders ran at $sysremTime");
 $query = "UPDATE $SYSTEM_TABLE SET";
 $query .= " `system_reminders` = '$sysremTime'";
