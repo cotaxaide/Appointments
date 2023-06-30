@@ -1,8 +1,26 @@
-<!DOCTYPE html>
 <?php
 //ini_set('display_errors', '1');
 
 // ---------------------------- VERSION HISTORY -------------------------------
+//File Version 9.00
+//	Major restructure to consolodate numerous site lists into a single "site" collection
+//	Fixed some issues with permissions
+//	Added an archival type code "A" to prevent loss of records due to invalid site number
+//	Added Excelexport interface for APPTBYWHO
+//	Added exporting only the one day when in daily view
+//	Entry of phone number and email show pink if bad format
+//	Prevent showing prior year data in searches and add year to search dates
+//	Search option to show or suppress deleted records
+//	Search for tags is limited to sites for which user is allowed to view appointments
+//	On move appointment, option added to mark old slot as RESERVED
+//	Added a new report to show site status
+//	Changed font style to sans-serif
+//	Added information on the bottom of the appt window if TP has other appointments
+//	Allow day of week selection for remove all data between 2 dates option
+//File Version 8.03a
+//	Removed a testing email that goes to bogarthome.net for each email
+//File Version 8.03
+//	Save excel export configuration in user database table vs cookie
 //File Version 8.01
 //	Excelexport interface changed to contributed version
 //	Prevent losing changes if closing appt window without saving
@@ -30,7 +48,7 @@
 //	Added site name
 //	header on appointment report
 //File Version 6.01
-//	Added site instruction box for UserView screen
+//	Added site instruction box for ViewUser screen
 //File Version 5.02c
 //	Fixed creation of callback records when not needed
 //	Fixed moving of a callback record to a different site callback record
@@ -45,8 +63,8 @@
 //	Prevent user from adding appointments with a different email or phone
 //File Version 5.02
 //	Fixed undefined variable when viewing Callback list
-//	Sites not visible in UserView due to calendar space at 50%
-//	Time of an appointment not displaying correctly in UserView
+//	Sites not visible in ViewUser due to calendar space at 50%
+//	Time of an appointment not displaying correctly in ViewUser
 //File Version 5.01c
 //	Added the ability to remove appointment records between 2 dates
 //File Version 5.01b
@@ -75,7 +93,7 @@ require_once "environment.php";
 //require_once "SMTP.php";
 
 // If the UserIndex has not been set as a session variable, the user needs to sign in
-if (@$_SESSION["UserIndex"] == 0) {
+if (! isset($_SESSION["User"])) {
 	header('Location: index.php'); // prevents direct access to this page (must sign in first).
 	exit;
 }
@@ -85,12 +103,12 @@ $Debug = ""; // Shows in menu in item named DebugText.
 $Errormessage = "";
 $Date = "";
 $MyTimeStamp = Date("Y-m-d H:i:s");
+$NewYearDay = Date("Y-01-01");
 $DisplayDate = "To be caclulated";
 $TimeNow = Date("h:ia");
 $HeaderText = "To be calculated";
-$DateList["init"] = "";
-$DateFlag["init"] = "";
-$DateLoc["init"] = "";
+$DateList = array();
+$DateFlag = array();
 $BgColor = "#FFFFCC";
 $FirstSlotDate = "";
 $FirstMonth = 0;
@@ -98,13 +116,12 @@ $FirstYear = 0;
 $LastMonth = 0;
 $LastYear = 0;
 $LastSlotNumber = 0;
-$LocationList[0] = 0;
-$LocationShow[0] = 0;
-$LocationAddress[0] = "";
-$LocationContact[0] = "";
-$LocationMessage[0] = "";
+$Site = array();
+$SitesShowing = array();
+$AccessableSites = 0;
 $ShowDagger = false;
 $ShowSlotBox = false;
+$ShowSearchBox = false;
 $ApptBox = "hidden";
 $MoveBox = "hidden";
 $ApptNo = "";
@@ -117,13 +134,15 @@ $ApptTags = "";
 $ApptNeed = "";
 $ApptInfo = "";
 $ApptStatus = "";
-$DeleteCode = "D";
+$apptType = array();
+$isDeleted = "";
+$ArchiveCode = "A";
+$isArchived = "";
 $FormApptNo = "InitialLogin";
 $FormApptTime = "";
 $FormApptName = "";
 $FormApptPhone = "";
 $FormApptEmail = "";
-$FormApptLoc = "";
 $FormApptTags = "";
 $FormApptNeed = "";
 $FormApptInfo = "";
@@ -132,44 +151,69 @@ $FormApptStatus = "";
 $FormApptTimeStamp = $TimeStamp;
 $FormApptOldNo = "";
 $MyWebsite = "";
-$UserName = "";
-$UserTables = "";
-$UserEmail = "";
-$UserPhone = "";
-$UserHome = "";
 $WaitSequence = 0;
-$MAxPermissions = 0;
-$SingleSite = 0;
+$MaxPermissions = 0;
 $EM_Reason = "";
 $OtherAppts = "";
 $DeletedClassFlag = false;
 $CallbackClassFlag = false;
+$ReserveOldSlot = false;
 $DateClassFlag = false;
-$LocationCBList = [];
-$LocationEmpty = [];
+$LocationCBList = array();
+$LocationEmpty = array();
+$UserViewLocationChosen = 0;
+$SaveMatchLoc = array();
+$SaveMatchLoc["Phone"] = array();
+$SaveMatchLoc["Email"] = array();
+$Searchlist = array();
 $RESERVED = "&laquo; R E S E R V E D &raquo;";
+$Tag_icon = "&#x2690;";
+$Phone_icon = "&#x260F;";
+$Name_icon = "<i class='material-icons' style='font-size:1em;'>wc</i>"; //"&#x263A;";
+$Email_icon = "&#x2709;";
+$CheckedBox_icon = "&#x2611;";
+$UncheckedBox_icon = "&#x2610;";
+$ERO_icon = "&#x2615;";
+$Clock_icon = "&#x1F557;";
+$Config_icon = "<span style='font-size:1.3em;'>&#x2699;</span>";
+$Home_icon = "&#x1F3E0;";
+$Help_icon = "<b><span class='help'>?</span></b>";
+$Excel_icon = "<img class='Excel-icon' src='Images/Excel-icon.png' title='click for excel export' />";
+$Summary_icon = "&sum;";
+$Warning_icon = "&#x26a0;";
+$Appt_icon = "<img src='Images/appt.png' title='Taxpayer may have an appointment or on callback list at another site' />";
+
 
 $SystemAttachList = explode("|", $_SESSION["SystemAttach"]);
 
-$UserIndex = $_SESSION["UserIndex"];
-$UserName  = $_SESSION["UserName"];
-$UserFirst = $_SESSION["UserFirst"];
-$UserLast = $_SESSION["UserLast"];
-$UserFullName = $_SESSION["UserFullName"];
-$UserEmail = $_SESSION["UserEmail"];
-$UserPhone = $_SESSION["UserPhone"];
-$UserOptions = $_SESSION["UserOptions"];
-$UserHome  = $_SESSION["UserHome"];
-$UserSiteList = $_SESSION["UserSiteList"];
+$UserIndex = $_SESSION["User"]["user_index"];
+$UserName  = $_SESSION["User"]["user_name"];
+$UserFirst = $_SESSION["User"]["user_first"];
+$UserLast = $_SESSION["User"]["user_last"];
+$UserFullName = "$UserFirst $UserLast";
+$UserEmail = strtolower($_SESSION["User"]["user_email"]);
+$UserPhone = $_SESSION["User"]["user_phone"];
+$UserOptions = $_SESSION["User"]["user_options"];
+$UserHome  = $_SESSION["User"]["user_home"];
+$UserTPHome = $_SESSION["User"]["user_appt_site"] ?? 0;
+$UserSiteShow = $_SESSION["User"]["user_sitelist"] ?? "|";
+if (($UserSiteShow === " ") or ($UserSiteShow === "|")) {
+	if ($UserHome) $UserSiteShow = "|$UserHome|";
+	else $UserSiteShow = "|$UserTPHome|";
+	$_SESSION["User"]["user_sitelist"] = $UserSiteShow;
+}
+$FormApptShow = trim(str_replace("|", ",", $UserSiteShow), ",");
 $UserPermissions = intval($UserOptions);
 if ($UserOptions === "A") {
 	$UserPermissions = $ACCESS_ALL | $ADMINISTRATOR;
 	$isAdministrator = true;
 }
+else $isAdministrator = false;
 if ($UserOptions === "M") {
 	$UserPermissions = $ACCESS_ALL | $MANAGER;
 	$isManager = true;
 }
+else $isManager = false;
 
 include "showslots.php";
 
@@ -181,26 +225,49 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 	if (strpos($_SERVER["HTTP_REFERER"], "appointment.php")) {
 		// Get the post data and process the change request
 		// may need htmlspecialchars_decode() later
-		$FormApptDate = htmlspecialchars(stripslashes(trim($_POST["IDApptDate"])));
-		$FormApptNo = htmlspecialchars(stripslashes(trim($_POST["IDApptSlot"])));
-		$FormApptTime = htmlspecialchars(stripslashes(trim($_POST["IDApptTime"])));
-		$FormApptName = htmlspecialchars(stripslashes(trim($_POST["IDApptName"])));
-		@$FormApptPhone = htmlspecialchars(stripslashes(trim($_POST["IDApptPhone"])));
-		@$FormApptEmail = htmlspecialchars(stripslashes(strtolower(trim($_POST["IDApptEmail"]))));
-		$FormApptLoc = htmlspecialchars(stripslashes(trim($_POST["IDApptLoc"])));
-		$FormApptTags = htmlspecialchars(stripslashes(trim($_POST["IDApptTags"])));  
-		$FormApptNeed = htmlspecialchars(stripslashes(trim($_POST["IDApptNeed"])));
-		$FormApptInfo = htmlspecialchars(stripslashes(trim($_POST["IDApptInfo"])));
-		$FormApptStatus = htmlspecialchars(stripslashes(trim($_POST["IDApptStatus"])));
-		$FormApptOldNo = htmlspecialchars(stripslashes(trim($_POST["IDApptOldSlot"]))); // Appt number being moved
-		$FormApptReason = htmlspecialchars(stripslashes(trim($_POST["IDApptReason"])));
-		$FormApptSlotDates = htmlspecialchars(stripslashes(trim($_POST["IDApptSlotDates"])));
-		$FormApptSlotDays = htmlspecialchars(stripslashes(trim($_POST["IDApptSlotDays"])));
-		$FormApptSlotLoc = htmlspecialchars(stripslashes(trim($_POST["IDApptSlotLoc"])));
-		$FormApptSlotSets = htmlspecialchars(stripslashes(trim($_POST["IDApptSlotSets"])));
-		$FormApptOldTimeStamp = htmlspecialchars(stripslashes(trim($_POST["IDApptTimeStamp"])));
-		$ApptView = htmlspecialchars(stripslashes(trim($_POST["IDApptView"])));	
-		$FormApptCustSite = htmlspecialchars(stripslashes(trim($_POST["IDApptCustSite"])));	
+
+		$ApptView = htmlspecialchars(stripslashes(trim($_POST["IDApptView"]))) ?? "";	
+			// ApptView: The view being requested
+		$FormApptDate = htmlspecialchars(stripslashes(trim($_POST["IDApptDate"]))) ?? "";
+			// FormApptDate: Date requested
+			// 	DailyView: daily view date desired or displayed
+			// 	Copy, Move: the date to copy/move to
+		$FormApptNo = htmlspecialchars(stripslashes(trim($_POST["IDApptSlot"]))) ?? "";
+			// FormApptNo: The appt number being added, modified, deleted, etc
+			// 	If not a number, another action to be performed. See switch below.
+		$FormApptReason = htmlspecialchars(stripslashes(trim($_POST["IDApptReason"]))) ?? "";
+			// FormApptReason: Varies depending on non-numerical request in FormApptNo
+			// 	If numerical: Add, Copy, Move, MoveAndReserve, Delete
+			// 	ViewSummary: ViewSummaryAll or ViewSummary = show earlier dates or not
+			// 	ViewUser: Delete = User is deleting their appointment
+			// 	Move/Copy: MoveAndReserve = reserves the move-from timeslot
+		$FormApptTime = htmlspecialchars(stripslashes(trim($_POST["IDApptTime"]))) ?? "";
+			// FormApptTime - FormApptStatus: The appointment data as submitted
+		
+		// Next 7 are fields from the appointment box for the selected user in FormApptNo
+		$FormApptName = htmlspecialchars(stripslashes(trim($_POST["IDApptName"]))) ?? "";
+		$FormApptPhone = htmlspecialchars(stripslashes(trim($_POST["IDApptPhone"]))) ?? "";
+		$FormApptEmail = htmlspecialchars(stripslashes(strtolower(trim($_POST["IDApptEmail"])))) ?? "";
+		$FormApptTags = htmlspecialchars(stripslashes(trim($_POST["IDApptTags"]))) ?? "";  
+		$FormApptNeed = htmlspecialchars(stripslashes(trim($_POST["IDApptNeed"]))) ?? "";
+		$FormApptInfo = htmlspecialchars(stripslashes(trim($_POST["IDApptInfo"]))) ?? "";
+		$FormApptStatus = htmlspecialchars(stripslashes(trim($_POST["IDApptStatus"]))) ?? "";
+
+		$FormApptShow = htmlspecialchars(stripslashes(trim($_POST["IDApptShow"]))) ?? "|";
+			// FormApptShow - List of comma-separated sites that are checkmarked to show appointments or export
+		$FormApptOldNo = htmlspecialchars(stripslashes(trim($_POST["IDApptOldSlot"]))) ?? "";
+			// FormApptOldNo: Appt number being moved, negative means copy
+
+		// FormApptSlotDates - FormApptSlotSets: Appt slot admin information
+		$FormApptSlotDates = htmlspecialchars(stripslashes(trim($_POST["IDApptSlotDates"]))) ?? "";
+		$FormApptSlotDays = htmlspecialchars(stripslashes(trim($_POST["IDApptSlotDays"]))) ?? "";
+		$FormApptSlotLoc = htmlspecialchars(stripslashes(trim($_POST["IDApptSlotLoc"]))) ?? "";
+		$FormApptSlotSets = htmlspecialchars(stripslashes(trim($_POST["IDApptSlotSets"]))) ?? "";
+
+		$FormApptOldTimeStamp = htmlspecialchars(stripslashes(trim($_POST["IDApptTimeStamp"]))) ?? "";
+			// FormApptOldTimeStamp: The date & time the last view was presented to the user
+			// 	Used to determine if an appointment record has changed since then
+		$FormApptCustSite = htmlspecialchars(stripslashes(trim($_POST["IDApptCustSite"]))) ?? "";	
 	}
 	else {
 	}
@@ -209,13 +276,13 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 	if ($FormApptReason == "ViewSummary") $_SESSION["SummaryAll"] = false;
 	if ($FormApptReason == "ViewSummaryAll") $_SESSION["SummaryAll"] = true;
 
-	// Determine the user's initial view
+	// Determine the user's initial view - does this duplicate lines 191-192 above?
 	if ($ApptView == "") $ApptView = ($UserPermissions < $VIEW_APP) ? "ViewCallback" : "ViewSummary";
 	if ($UserHome == 0) $ApptView = "ViewUser";
 
 	switch ($FormApptNo) {
 		// if other than a database slot number,
-		// FormApptNo may be text that tells what to do with the slot last chosen
+		// 	FormApptNo may be text that tells what to do with the slot last chosen
 		case "": break;
 		case "LogOut":
 			session_unset();
@@ -235,7 +302,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 		case "NewDate":
 			$FirstSlotDate = $Date = $FormApptDate;
 			break;
-		case "Move": // A new date has been chosen
+		case "MoveAndReserve":
+			$ReserveOldSlot = true;
+			// No break
+		case "Move":
 			$FirstSlotDate = $Date = $FormApptDate;
 			$ApptMove = $FormApptOldNo;
 			$ApptBox = "visible";
@@ -270,14 +340,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 			Add_Wait_Slots($FormApptSlotSets, $FormApptSlotLoc);
 			break;
 		case "PrintExcel":
-			if ($_SESSION["TRACE"]) {
-				error_log("APPT: $UserName, view=$ApptView, action=$FormApptNo");
-			}
-			$_SESSION["ExportList"] = $FormApptReason;
-
-			//new version
-			$url = "excelexport.php?UserSiteList=" . $UserSiteList . "&ExportList=" . $FormApptReason;
-			echo '<meta http-equiv=refresh content="1; '. $url . '">';
+			Excel_Export();
 			break;
 		case "InitialLogin":
 			break;
@@ -295,6 +358,11 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 			$loc0 = $row['appt_location'];
 			$wait0 = $row['appt_wait'];
 			$lname0 = $row['site_name'];
+
+			// Parse the Type
+			$apptType = explode("|", $row['appt_type']);
+			$isDeleted = $apptType[0] ?? "";
+			$isArchived = $apptType[1] ?? "";
 
 			// If name is newly RESERVED, clear other user-specific fields
 			if ($FormApptName == htmlspecialchars($RESERVED)) {
@@ -323,10 +391,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 			$tm1 = substr($tm0, 0, 5);
 			$un1 = ($UserHome == 0) ? "USER" : $UserName;
 
-			// check the time stamp to be sure the entry is current or vacant
+			// check the time stamp to be sure the requested time slot has current information or not assigned
 			if (($FormApptOldTimeStamp >= $ts0) or ($nm0 == "")) {
+
 				// add to the status history
-				$typ1 = $row['appt_type'];
 				$newstatus = $FormApptStatus;
 				switch ($FormApptReason) {
 					case "Add":
@@ -355,12 +423,14 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 							$newstatus = "$dt1: Copied to $dy1 at $tm1 at $lname0 ($un1)%0A$newstatus";
 						}
 						break;
+					case "MoveAndReserve":
 					case "Move":
+						$res = ($ReserveOldSlot) ? "and reserved $dy0 at $tm0" : "" ;
 						if ($FormApptDate == $NullDate) {
-							$newstatus = "$dt1: Moved to Callback list ($un1)%0A$newstatus";
+							$newstatus = "$dt1: Moved to Callback list ($un1)%0A$newstatus $res";
 						}
 						else {
-							$newstatus = "$dt1: Moved to $dy1 at $tm1 at $lname0 ($un1)%0A$newstatus";
+							$newstatus = "$dt1: Moved to $dy1 at $tm1 at $lname0 ($un1)%0A$newstatus $res";
 						}
 						break;
 					case "Delete":
@@ -391,7 +461,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 					$UserFirst = "";
 					$UserLast = "";
 					$MyTimeStamp = "";
-					$DeleteCode = "";
+					$isDeleted = "";
+					$isArchived = "";
 				}
 
 				// Update the slot with any changes
@@ -405,16 +476,18 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 				$query .= ", `appt_status` = '$FormApptStatus'";
 				$query .= ", `appt_by` = '$UserFirst $UserLast'";
 				$query .= ", `appt_change` = '$MyTimeStamp'";
-				if ((($ApptView == "ViewDeleted") and ($typ1 == $DeleteCode))  // keep it deleted
+				if ((($ApptView == "ViewDeleted") and ($isDeleted))  // keep it deleted
 				or ($FormApptReason == "Delete")) { // delete from active record
-					$query .= ", `appt_type` = '$DeleteCode'";
+					$apptTypetxt = "D|" . $isArchived;
+					$query .= ", `appt_type` = '$apptTypetxt'";
 					$query .= ", `appt_date` = '$NullDate'";
 					$query .= ", `appt_time` = '$NullTime'";
 				}
 				else {
-					$query .= ", `appt_type` = ''";
+					$apptTypetxt = $isDeleted . "|" . $isArchived;
+					$query .= ", `appt_type` = '$apptTypetxt'";
 					// If user is being added to Callback list, update wait sequence number
-					if (($dy0 == $NullDate) and ($wait0 == 0) and (($ApptView == "ViewUser") OR ($ApptView == "ViewCallback"))) {
+					if (($dy0 == $NullDate) and ($wait0 == 0) and (($ApptView == "ViewUser") or ($ApptView == "ViewCallback"))) {
 						$MaxWaitSequence = ++$_SESSION["MaxWaitSequence"];
 						$query .= ", `appt_wait` = '$MaxWaitSequence'";
 					}
@@ -424,8 +497,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
 				if ($success) {
 					if ($UserHome == 0) { // Record appointment site in user table
+						$loc0x = "|$loc0|";
 						$query = "UPDATE $USER_TABLE SET";
 						$query .= " `user_appt_site` = $loc0";
+						$query .= ", `user_sitelist` = '$loc0x'";
 						$query .= " WHERE `user_index` = $UserIndex";
 						mysqli_query($dbcon, $query);
 					}
@@ -436,23 +511,31 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 					}
 
 					// Deal with the old record
-					// Note: If moving from a deleted record, this will leave it as a useable callback record
-					// At some point, we may want to delete excess empty callback records.
 					if (($ApptView != "ViewDelete") and ($FormApptOldNo > 0)) {
+						$ResName = ($FormApptReason == "MoveAndReserve") ? htmlspecialchars($RESERVED) : "" ;
+						$ResStat = ($FormApptReason == "MoveAndReserve") ? "$dt1: Reserved by SYSTEM" : "" ;
 						$query = "UPDATE $APPT_TABLE SET";
-						$query .= " `appt_name` = ''";
+						$query .= " `appt_name` = '$ResName'";
 						$query .= ", `appt_phone` = ''";
 						$query .= ", `appt_email` = ''";
 						$query .= ", `appt_emailsent` = ''";
 						$query .= ", `appt_tags` = ''";
 						$query .= ", `appt_need` = ''";
 						$query .= ", `appt_info` = ''";
-						$query .= ", `appt_status` = ''";
+						$query .= ", `appt_status` = '$ResStat'";
 						$query .= ", `appt_type` = ''";
 						$query .= ", `appt_by` = '$UserFirst $UserLast'";
 						$query .= ", `appt_change` = '$MyTimeStamp'";
 						$query .= " WHERE `appt_no` = $FormApptOldNo";
+						$query .= " AND `appt_date` != $NullDate";
 						mysqli_query($dbcon, $query);
+					}
+
+					// Do a search on phone and email if Add request by scheduler
+					if (($FormApptReason == "Add") and ($ApptView != "ViewUser")) {
+						$FindByVal = $FormApptNo; // Saved so Do_Search can omit this record
+						$FormApptNo = "FindByPhoneOrEmail";
+						Do_Search();
 					}
 
 					// Prepare to send email
@@ -479,23 +562,25 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 					}
 				}
 			}
-			else {
-				//if ($_SESSION["TRACE"]) {
-				//	error_log("APPT: " . $UserName . ", view=" . $ApptView . ", action=" . $FormApptNo);
-				//}
-				// Was this a clash in the Callback list?
+
+			else {  // Was this a clash in the Callback list?
+
 				if ($dy0 == $NullDate) {
 					// Add a new record to accept the new taxpayer
 					$newstatus = $FormApptStatus;
 					switch ($FormApptReason) {
 						case "Add": $newstatus = "$dt1: Added to Callback list ($un1)%0A$newstatus"; break;
+						case "MoveAndReserve": // no break;
 						case "Move": $newstatus = "$dt1: Moved to Callback list ($un1)%0A$newstatus"; break;
 						case "Copy": $newstatus = "$dt1: Copied to Callback list ($un1)%0A$newstatus"; break;
 					}
 					$ApptWaitSequence = ++$_SESSION["MaxWaitSequence"];
 					InsertNewAppt($FormApptName, $FormApptPhone, $FormApptEmail, $FormApptTags, $FormApptNeed, $FormApptInfo, $newstatus, $ApptWaitSequence, $NullDate, $NullTime, $loc0, $UserFullName);
 				}
+
 				else {
+					if ($_SESSION["TRACE"])
+						error_log("APPT: $UserName view=$ApptView, action=$FormApptNo CONFLICT");
 					$Errormessage .= "What you just tried to do did not work because someone else just tried to do the same thing.  Please try again.";
 				}
 			}
@@ -504,8 +589,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
 if ($_SESSION["TRACE"]) {
 	$log_text = "APPT: " . $UserName . ", view=" . $ApptView . ", action=" . $FormApptNo;
-	if (isset($FormApptReason)) $log_text .= ", reason=" . $FormApptReason;
-	if (isset($FormApptName)) $log_text .=	", name=" . $FormApptName;
+	if ($FormApptReason) $log_text .= ", data=" . $FormApptReason;
+	if ($FormApptName) $log_text .=	", name=" . $FormApptName;
 	error_log($log_text);
 	if ($Errormessage) {
 		$log_text = "APPT: " . $UserName . ", error=" . $Errormessage;
@@ -513,154 +598,89 @@ if ($_SESSION["TRACE"]) {
 	}
 }
 
-// Make a list of locations allowed to this user (this could be changed to an array)
 // MaxPermissions is the highest of all - helps control what buttons they see
 $MaxPermissions = $UserPermissions;
+
 // Always include the home site
 $SitePermissions["S" . $UserHome] = $UserPermissions;
-$UserTables = "0|" . $UserHome; // leading text to prevent match at index 0.
+
 $query = "SELECT * FROM $ACCESS_TABLE";
+$query .= " WHERE `acc_user` = $UserIndex";
 $query .= " ORDER BY `acc_owner`, `acc_user`";
 $locs = mysqli_query($dbcon, $query);
-while ($row = mysqli_fetch_array($locs)) {
+if (! $locs == NULL) while ($row = mysqli_fetch_array($locs)) {
 	$accOwner = $row["acc_owner"];
 	$accUser = $row["acc_user"];
-	$accLocation = $row["acc_location"];
 	$accOption = $row["acc_option"];
 	$accSOwner = "S" . $accOwner;
 	if ($accOwner != $UserHome) {
-		if ($accUser == $UserIndex) {
-			// Permission for this user for this site
-			$SitePermissions[$accSOwner] =  0;
-			if ($accOption === "M") $accOption = $ACCESS_ALL | $MANAGER;
-			$SitePermissions[$accSOwner] =  $accOption; // added for the user
-			$MaxPermissions = $MaxPermissions | $accOption; // bitwise or
-		}
-		if (@$SitePermissions[$accSOwner] > 0) $UserTables .= "|" . $accOwner;
+		// Permissions for this user for this site
+		if ($accOption === "M") $accOption = $ACCESS_ALL | $MANAGER;
+		$SitePermissions[$accSOwner] = $accOption; // added for the user
+		$MaxPermissions = $MaxPermissions | $accOption; // bitwise or
 	}
 }
-$UserTables .= "|";
 
-$FormShowInit = "";
+// Open the form with the home site checkmarked if none other is
+$FormApptShow = $FormApptShow ?? $UserHome;
+$SitesShowing = explode("," , $FormApptShow);
 $j = 0;
+
+// Get each site data and build an array of sites
 $query = "SELECT * FROM $SITE_TABLE";
 $query .= " ORDER BY `site_name`";
 $locs = mysqli_query($dbcon, $query);
 while ($row = mysqli_fetch_array($locs)) {
-	$SiteIndex = $row["site_index"];
-	$SiteSIndex = "S" . $SiteIndex;
-	$SiteName = htmlspecialchars_decode($row["site_name"] ?? '');
-	$SiteInet = array(0, 0);
-	$SiteInet = explode(":", $row["site_inet"]);
-	$SiteSumRes = $row["site_sumres"];
-	$Site10dig = $row["site_10dig"];
-	$SiteOpen = $row["site_open"];
-	$SiteClosed = $row["site_closed"];
-	$SiteMessage = htmlspecialchars_decode($row["site_message"] ?? '');
-	$SiteInstructions = htmlspecialchars_decode($row["site_instructions"] ?? '');
+	$SIndex = "S" . $row["site_index"];
+	if ($SIndex == "S1") continue; // Skip the "Unassigned" site
+	$ThisSite = array();
+	$ThisSite["Index"] = $row["site_index"];
+	$ThisSite["Name"] = htmlspecialchars_decode($row["site_name"] ?? '');
+	$SiteInetPart = explode(":", $row["site_inet"]);
+	$ThisSite["Inet"] = $SiteInetPart[0] ?? '';
+	$ThisSite["InetLimit"] = $SiteInetPart[1] ?? 0;
+	$ThisSite["SumRes"] = $row["site_sumres"];
+	$ThisSite["10dig"] = $row["site_10dig"];
+	$ThisSite["OpenDate"] = $row["site_open"];
+	$ThisSite["ClosedDate"] = $row["site_closed"];
+	$ThisSite["IsOpen"] = (($ThisSite["OpenDate"] >= $TodayDate) and ($ThisSite["ClosedDate"] < $TodayDate)) ? "T" : "F" ;
+	$ThisSite["Message"] = htmlspecialchars_decode($row["site_message"] ?? '');
+	$ThisSite["Instructions"] = htmlspecialchars_decode($row["site_instructions"] ?? '');
 	$SiteAddress = htmlspecialchars_decode($row["site_address"] ?? '');
-	$SiteContact = htmlspecialchars_decode($row["site_contact"] ?? '');
-	$SiteAttach = $row["site_attach"];
-	$LocationLookup[$SiteSIndex] = 0; // definition only, will be changed below
-	$SiteNameList[$SiteSIndex] = $SiteName; // Name of all sites
-	if ($SiteIndex > 1) { // skip "Unassigned" site (not relevant here)
+	$SiteAddressPart = explode("|", $SiteAddress);
+	$ThisSite["Address"] = $SiteAddressPart[0] ?? '';
+	$ThisSite["City"] = $SiteAddressPart[1] ?? '';
+	$ThisSite["State"] = $SiteAddressPart[2] ?? '';
+	$ThisSite["Zip"] = $SiteAddressPart[3] ?? '';
+	$ThisSite["Phone"] = $SiteAddressPart[4] ?? '';
+	$ThisSite["Email"] = $SiteAddressPart[5] ?? '';
+	$ThisSite["Website"] = $SiteAddressPart[6] ?? '';
+	if ($ThisSite["Index"] == $UserHome) $MyWebsite = $ThisSite["Website"];
+	$ThisSite["Contact"] = htmlspecialchars_decode($row["site_contact"] ?? '');
+	$ThisSite["Attachments"] = $row["site_attach"];
 
-		if ($UserOptions === "A") {
-			$UserTables .=  "|" . $SiteIndex;
-			$SitePermissions[$SiteSIndex] = $ACCESS_ALL | $ADMINISTRATOR;
-		}
+	// Set up permissions for this site
+	if ($isAdministrator) $SitePermissions[$SIndex] = $ACCESS_ALL | $ADMINISTRATOR;
+	$ThisSite["Permissions"] = $SitePermissions[$SIndex] ?? 0; // from acc_table
+	if ($ThisSite["Permissions"]) $AccessableSites++; // Used to set height of site list area
 
-		if (($UserOptions === "A")
-		or (($UserHome == 0) and ($SiteInet !== "") and ($SiteClosed >= $TodayDate))
-		or (strpos($UserTables, ("|" . $SiteIndex . "|") ) > 0)) {
-			$LocationList[0] = ++$j;
-			$LocationList[$j] = $SiteIndex;
-			$LocationName[$j] = $SiteName;
-			$LocationInet[$j] = $SiteInet[0];
-			$LocationInetLimit[$j] = (isset($SiteInet[1])) ? $SiteInet[1] : 0;
-			$LocationSumRes[$j] = $SiteSumRes;
-			$Location10dig[$j] = $Site10dig;
-			$LocationOpen[$j] = $SiteOpen;
-			$LocationClosed[$j] = $SiteClosed;
-			$LocationIsOpen[$j] = (($TodayDate >= $LocationOpen[$j]) AND ($TodayDate < $LocationClosed[$j]));
-			$LocationAddress[$j] = $SiteAddress;
-			$LocationContact[$j] = $SiteContact;
-			$LocationMessage[$j] = $SiteMessage;
-			$LocationInstructions[$j] = $SiteInstructions;
-			$LocationLookup[$SiteSIndex] = $j;
+	// Indicate which sites are being displayed
+	$ThisSite["Show"] = (in_array($ThisSite["Index"], $SitesShowing)) ? "checked" : "" ;
+	if ($ThisSite["Show"]) $UserViewLocationChosen = $ThisSite["Index"]; // ViewUser site number
 
-			// Create the email attachment text for this site
-			$latext = "";
-			$lahtml = "";
-			if ($SiteAttach) {
-				$breaktext = "";
-				$breakhtml = "";
-				$lahtml = "<ul class=\"attachlist\">";
-				for ($lax = 0; $lax < sizeof($SystemAttachList)-1; $lax++) {
-					$sap = explode("=", $SystemAttachList[$lax]);
-					if (strpos($SiteAttach, $sap[0]) !== false) {
-						$latext .= "$breaktext - $sap[0] ($sap[1])";
-						$saplink = "<a href=\"$sap[1]\">$sap[1]</a>";
-						$lahtml .= "$breakhtml<li> - $sap[0] ($saplink)";
-						$breaktext = "\n";
-						$breakhtml = "</li>";
-					}
-				}
-				$lahtml .= "</li></ul>";
-			}
-			$LocationAttachText[$j] = $latext; // used for email
-			$LocationAttachHTML[$j] = $lahtml; // used for UserView instructions
+	// Place holders for later tallies
+	$ThisSite["AvailCBCount"] = 0;
+	$ThisSite["BusyCBCount"] = 0;
+	$ThisSite["AvailCount"] = 0;
+	$ThisSite["ResCount"] = 0;
+	$ThisSite["BusyCount"] = 0;
+	$ThisSite["InetCount"] = 0;
 
-			if ($SiteIndex == $UserHome) {
-				$MyWebsite = explode("|", $SiteAddress)[6];
-			}
-
-			// Open the form with the home site checkmarked if none other is
-			if ($FormApptLoc == "") {
-				if (! isset($_SESSION["UserSiteList"])) $_SESSION["UserSiteList"] = "|";
-				if (($_SESSION["UserSiteList"] == "|") AND ($SiteIndex == $UserHome)) {
-					$_SESSION["UserSiteList"] = "|$UserHome|";
-				}
-				if (strpos(("|" . $_SESSION["UserSiteList"]), "|$SiteIndex|") > 0) {
-					$FormShowInit .= ", 1";
-				}
-				else {
-					$FormShowInit .= ", 0";
-				}
-			}
-			//$LocationName[1] .= "<br />$SiteIndex=" . @$_SESSION["UserSiteList"] . "($FormShowInit)"; // DEBUG
-		}
-
-	}
+	// Add ThisSite to the Site array
+	$Site[$SIndex] = $ThisSite;
 }
 
-$newuserloclist = false;
-if ($FormApptLoc == "") {
-	$newuserloclist = true;
-	$FormApptLoc = $LocationList[0] . $FormShowInit;
-}
-$LocationShow = explode(",", $FormApptLoc);
-
-// If this is a self-schedule and there's an appointment, set to show that site
-// Unless the user has selected another site
-if (($ApptView == "ViewUser") AND $newuserloclist) { // a site has not been selected yet
-	$_SESSION["UserLoc"] = 0; // to be tested later
-	$query = "SELECT * FROM $APPT_TABLE";
-	$query .= " WHERE `appt_email` = '$UserEmail'";
-	$query .= " OR `appt_phone` = '$UserPhone'";
-	$appt = mysqli_query($dbcon, $query);
-	while ($row = mysqli_fetch_array($appt) AND ($_SESSION["UserLoc"] == 0)) {;
-		if ($row["appt_type"] != $DeleteCode) {
-			$Loc = $row["appt_location"];
-			$LocationIndex = $LocationLookup["S" . $Loc];
-			$LocationShow[$LocationIndex] = 1;
-			$LocationShow[0] = 1;
-			$_SESSION["UserLoc"] = $Loc;
-		}
-	}
-}
-$appt = []; // release the memory used;
-$locs = []; // release the memory used;
+unset($appt, $locs); // release the memory used;
 
 // Send an email if set up previously
 if ($EM_Reason != "") Send_Email($EM_Reason, $EM_View, $EM_Name, $EM_Email, $EM_Day, $EM_Time, $EM_Location);
@@ -678,6 +698,9 @@ function Create_Menu() {
 	global $ADMINISTRATOR;
 	global $ApptView;
 	global $MyWebsite;
+	global $Name_icon, $Phone_icon, $Email_icon, $Tag_icon, $CheckedBox_icon, $ERO_icon, $Clock_icon;
+	global $Excel_icon, $Summary_icon, $Home_icon, $Help_icon;
+	global $Config_icon;
 
 	echo "<div class='menu-buttons'>\n";
 	if ($ApptView != "ViewUser") {
@@ -685,21 +708,22 @@ function Create_Menu() {
 			// Search group
 			echo "<div class='menuButton' id='SearchAppt'>Search\n";
 			echo "\t<div class='menuButtonList'>\n";
-			echo "\t\t<div class='menuButtonListItem' id='SearchApptTags' onclick='Show_SearchBox(this.id)'>&#x2690; Search by Tag</div>\n";
-			echo "\t\t<div class='menuButtonListItem' id='SearchApptPhone' onclick='Show_SearchBox(this.id)'>&#x260F; Search by Phone Number</div>\n";
-			echo "\t\t<div class='menuButtonListItem' id='SearchApptName' onclick='Show_SearchBox(this.id)'>&#x263A; Search by Name</div>\n";
-			echo "\t\t<div class='menuButtonListItem' id='SearchApptEmail' onclick='Show_SearchBox(this.id)'>&#x2709; Search by Email</div>\n";
+			echo "\t\t<div class='menuButtonListItem' id='SearchApptTags' onclick='Show_SearchBox(this.id)'>$Tag_icon Search by Tag</div>\n";
+			echo "\t\t<div class='menuButtonListItem' id='SearchApptPhone' onclick='Show_SearchBox(this.id)'>$Phone_icon Search by Phone Number</div>\n";
+			echo "\t\t<div class='menuButtonListItem' id='SearchApptName' onclick='Show_SearchBox(this.id)'>$Name_icon Search by Name</div>\n";
+			echo "\t\t<div class='menuButtonListItem' id='SearchApptEmail' onclick='Show_SearchBox(this.id)'>$Email_icon Search by Email</div>\n";
 			echo "\t</div>\n";
 			echo "</div>\n";
 
 			// Report group
 			echo "<div class='menuButton' id='ReportAppt'>Reports\n";
 			echo "\t<div class='menuButtonList'>\n";
-			if (($ApptView == "ViewDaily") OR ($ApptView == "ViewCallback")) {
-				echo "\t\t<div class='menuButtonListItem' id='PrintAppt' onclick='Print_Appointments()'>&#x2611; Print check-in list</div>\n";
-				echo "\t\t<div class='menuButtonListItem' id='PrintERO' onclick='Print_ERO_Checklist()'>&#x2615; Print ERO Checklist</div>\n";
+			if (($ApptView == "ViewDaily") or ($ApptView == "ViewCallback")) {
+				echo "\t\t<div class='menuButtonListItem' id='PrintAppt' onclick='Print_Appointments();'>$CheckedBox_icon Print check-in list</div>\n";
+				echo "\t\t<div class='menuButtonListItem' id='PrintERO' onclick='Print_ERO_Checklist();'>$ERO_icon Print ERO Checklist</div>\n";
 			}
-			echo "\t\t<div class='menuButtonListItem' id='PrintExcel' onclick='Show_ExportBox()'><img id='Excel-icon' src='Images/Excel-icon.png' /> Export site data to excel</div>\n";
+			echo "\t\t<div class='menuButtonListItem' id='PrintStatus' onclick='Show_Stats();'>$Summary_icon Site status summary</div>\n";
+			echo "\t\t<div class='menuButtonListItem' id='PrintExcel' onclick='Show_ExportBox();'>$Excel_icon Export site data to excel</div>\n";
 			echo "\t</div>\n";
 			echo "</div>\n";
 		}
@@ -707,8 +731,8 @@ function Create_Menu() {
 			// Tools group
 			echo "<div class='menuButton' id='ToolsAppt'>Tools\n";
 			echo "\t<div class='menuButtonList'>\n";
-			echo "\t\t<div class='menuButtonListItem' id='ConfigAppt' onclick='Show_SlotBox()'>&#x1F557; Configure appointment slots</div>\n";
-			echo "\t\t<div class='menuButtonListItem' id='ConfigSite' onclick='Site_Manage()'>&#x2699; Options and permissions</div>\n";
+			echo "\t\t<div class='menuButtonListItem' id='ConfigAppt' onclick='Show_SlotBox();'>$Clock_icon Configure appointment slots</div>\n";
+			echo "\t\t<div class='menuButtonListItem' id='ConfigSite' onclick='Site_Manage();'>$Config_icon Options and permissions</div>\n";
 			echo "\t</div>\n";
 			echo "</div>\n";
 		}
@@ -716,9 +740,9 @@ function Create_Menu() {
 		// Help group
 		echo "<div class='menuButton' id='MenuAppt'>Help\n";
 		echo "\t<div class='menuButtonList'>\n";
-		echo "\t\t<div class='menuButtonListItem' id='HelpAppt' onclick=\"Open_Window('Appointment help.pdf')\"><b><span class='help'>?</span></b> Scheduler tutorial</div>\n";
+		echo "\t\t<div class='menuButtonListItem' id='HelpAppt' onclick=\"Open_Window('Appointment help.pdf');\">$Help_icon Scheduler tutorial</div>\n";
 		if ($MyWebsite) {
-			echo "\t\t<div class='menuButtonListItem' id='HelpSite' onclick=\"Open_Window('$MyWebsite')\">&#x1F3E0; Your home website</div>\n";
+			echo "\t\t<div class='menuButtonListItem' id='HelpSite' onclick=\"Open_Window('$MyWebsite');\">$Home_icon Your home website</div>\n";
 		}
 		echo "\t</div>\n";
 		echo "</div>\n";
@@ -733,33 +757,30 @@ function Calc_Slots() {
 //	Calculates the number of appointments for each date and if any are available
 //===========================================================================================
 	global $Debug, $Errormessage;
-	global $DateList, $DateFlag, $DateLoc, $TodayDate, $NullDate, $NullTime, $FirstMonth, $FirstYear, $LastMonth, $LastYear;
+	global $DateList, $DateFlag, $TodayDate, $NullDate, $NullTime, $FirstMonth, $FirstYear, $LastMonth, $LastYear;
 	global $APPT_TABLE, $FirstSlotDate;
-	global $LocationShow, $LocationLookup, $LocationList, $LocationName;
-	global $LocationIndex;
-	global $SiteNameList;
+	global $Site;
 	global $VERSION, $Errormessage;
 	global $CustEList, $CustPList, $UserEmail, $UserPhone;
 	global $FormApptNo, $FormApptReason, $FormApptPhone, $OtherAppts, $FormApptEmail, $FormApptName;
-	global $UserPermissions, $MaxPermissions, $ADD_CB, $VIEW_CB, $ADD_APP, $VIEW_APP;
+	global $MaxPermissions, $ADD_CB, $VIEW_CB, $ADD_APP, $VIEW_APP;
+	global $isAdministrator;
 	global $ApptView;
-	global $LocationCBList;
-	global $LocationEmpty;
 	global $RESERVED;
 	global $dbcon;
 	global $DateClassFlag;
 	global $MyTimeStamp;
 	global $siteHeight, $siteMaxHeight;
 	global $UserName;
-	global $Name, $Date, $Appt, $Phone, $Email;
-	global $Date, $Time, $TodayDate, $NullDate;
-	global $Appt, $Name, $Type;
-	global $DeleteCode;
+	global $Name, $Appt, $Phone, $Email, $Type;
+	global $Date, $Time;
+	global $ArchiveCode;
+	global $AccessableSites;
+	global $SaveMatchLoc;
 
 	$OldMO = "";
 	$Date = $TodayDate;
 	$OldDate = "";
-	$AvailableCBSlots = [];
 	$CustEList = "";
 	$CustPList = "";
 
@@ -783,10 +804,10 @@ function Calc_Slots() {
 		echo "</div>\n";
 		echo "<div id='viewLabel'>V I E W</div>\n";
 	}
-	else if ($UserPermissions > 0) {
+	else if ($MaxPermissions > 0) {
 		echo "<div id='viewButtons'>\n";
 		echo "<button class='viewButton' id='ViewUser' style='background-color: lightgreen;' onclick='Change_View(this.id)'>Personal</button>\n";
-		if ($UserPermissions > ($ADD_CB + $VIEW_CB)) {
+		if ($MaxPermissions > ($ADD_CB + $VIEW_CB)) {
 			echo "<button class='viewButton' id='ViewSummary2' onclick='Change_View(this.id)'>Summary</button>\n";
 		}
 		else {
@@ -805,7 +826,9 @@ function Calc_Slots() {
 		$calMinHeight = "min-height: 0%"; // override default
 	}
 	else {
-		$siteHeight = ($LocationList[0] * 1.5) . "em";
+		$SH = $AccessableSites;
+		$AH = ($isAdministrator) ? 1.7 : 0 ; // Increase for Admin buttons
+		$siteHeight = (($SH * 1.5) + $AH) . "em";
 		$siteMaxHeight = "50%";
 		$calHidden = "visibility: visible;";
 		$siteTop = "top: 3em;";
@@ -819,7 +842,7 @@ function Calc_Slots() {
 	// Initialize the calendar
 	echo "<div id='viewCal' style='max-height: calc(100% - $siteHeight); $calHidden $calMinHeight'>\n";
 	echo "<div id='CalBoxDiv'>\n";
-	if (@$_SESSION["CalStartMo"] == 0) {
+	if (($_SESSION["CalStartMo"] ?? 0) == 0) {
 		$DPART = explode("-", $TodayDate);
 	       	$_SESSION["CalStartYr"] = $DPART[0];
 	       	$_SESSION["CalStartMo"] = $DPART[1];
@@ -840,51 +863,96 @@ function Calc_Slots() {
 		$Email = $row["appt_email"];
 		$Phone = $row["appt_phone"];
 		$Location = $row["appt_location"];
-		$LocationSIndex = "S" . $Location;
-		$Type = $row["appt_type"];
 		$Status = $row["appt_status"];
 
-		// Check for a valid site number. If invalid, delete it
-		if (! isset($LocationLookup[$LocationSIndex])) {
-			$query = "DELETE FROM $APPT_TABLE";
+		$apptType = explode("|", $row['appt_type']);
+		$isDeleted = $apptType[0] ?? "";
+		$isArchived = $apptType[1] ?? "";
+		if ($isArchived) continue;
+		if ($Location == 1) continue; // Unassigned site, should never happen but...
+
+		$ThisSite = &$Site["S" . $Location];
+		$NameIsNull = ($Name == "");
+		$NameIsRes = ($Name == $RESERVED);
+		$NameIsBusy = ((! $NameIsNull) and (! $NameIsRes));
+
+		// Check for a valid site number. If invalid, archive it
+		if (! isset($ThisSite["Index"])) {
+			$apptTypetxt = $isDeleted . "|A";
+			$query = "UPDATE $APPT_TABLE SET";
+			$query .= " `appt_type` = '$apptTypetxt'";
 			$query .= " WHERE `appt_no` = $Appt";
 			mysqli_query($dbcon, $query);
 			if ($_SESSION["TRACE"]) {
-				error_log("APPT: SYSTEM, Deleted record with Name  " . $Name . ", site " . $Location);
+				error_log("APPT: SYSTEM, Archived record with Name=" . $Name . ", site=" . $Location);
 			}
 			continue;
 		}
-		$LocationIndex = $LocationLookup[$LocationSIndex];
-		if ($Date != $NullDate) {
-			Add_to_matchlist($Name, $Email, $Phone, $Appt, $Date, $Time, $LocationSIndex);
-		}
-		if (! isset($LocationName[$LocationIndex])) continue; // get the next one
 
-		if (($Date == $NullDate) AND ($Name != "") AND (@$LocationShow[$LocationIndex])) {
-			Check_UserClassFlags($Type, $Status);
+		if (($Date == $NullDate) and (! $NameIsNull) and $ThisSite["Show"]) {
+			Check_UserClassFlags($isDeleted, $Status);
 		}
 
 		// Make a list of appointments with the same phone or email for the user view
-		if ($ApptView == "ViewUser") User_view_list();
+		if ($ApptView == "ViewUser") User_view_list($ThisSite["Index"]);
 
-		// $LocationIndex undefined causes an undefined offset error DEBUG
-		if (!isset($LocationShow[$LocationIndex])) {
-			//error_log("APPTX: SYSTEM, LocationIndex=" . $LocationIndex);
-			//error_log("APPTX: SYSTEM, LocationName=" . $LocationName[$LocationIndex]);
-			$LocationShow[$LocationIndex] = "";
-		}
-		if (($Type != $DeleteCode) AND ($LocationShow[$LocationIndex] > 0)){
+		// Count slots for later display
+		if ($isDeleted) continue; // Skip them
 
-			// Count callback list slots
-			if (! isset($AvailableCBSlots[$LocationIndex])) $AvailableCBSlots[$LocationIndex] = 0;
-			if (! isset($LocationCBList[$LocationIndex])) $LocationCBList[$LocationIndex] = 0;
-			if ($Date == $NullDate) {
-				if ($Name == "") $AvailableCBSlots[$LocationIndex]++;
-				else $LocationCBList[$LocationIndex]++; // count how many names there are
+		// Count callback list slots
+		if ($Date == $NullDate) {
+			if ($NameIsNull) $ThisSite["AvailCBCount"]++;
+			else {
+				$ThisSite["BusyCBCount"]++;
+				$email_match = $phone_match = false;
+				if ($Phone > "000-000-0000") {
+					array_push($SaveMatchLoc["Phone"], $Phone);
+					if (!isset($SaveMatchLoc["Phone"][$Phone])) $SaveMatchLoc["Phone"][$Phone] = [];
+					$phone_match = true;
+				}
+				if ($Email) {
+					array_push($SaveMatchLoc["Email"], $Email);
+					if (!isset($SaveMatchLoc["Email"][$Email])) $SaveMatchLoc["Email"][$Email] = [];
+					$email_match = true;
+				}
+				if (($phone_match) and ($email_match)) {
+					array_push($SaveMatchLoc["Phone"][$Phone], $ThisSite["Index"] . "|CE|$Name");
+				}
+				else if ($phone_match) {
+					array_push($SaveMatchLoc["Phone"][$Phone], $ThisSite["Index"] . "|C|$Name");
+				}
+				else if ($email_match) {
+					array_push($SaveMatchLoc["Email"][$Email], $ThisSite["Index"] . "|C|$Name");
+				}
 			}
+		}
 
-			// Analyze used (or reserved) dates
-			if ($Date != $NullDate) {
+		else if ($ThisSite["AvailCBCount"] == 0) { // Add a Callback slot if none was found
+			InsertNewAppt('', '', '', '', '', '', '', '', $NullDate, $NullTime, $ThisSite["Index"], 'SYSTEM');
+			$ThisSite["AvailCBCount"]++;
+			if ($_SESSION["TRACE"]) {
+				error_log("APPT: SYSTEM, Added empty Callback record for site " . $ThisSite["Name"] . " (" . $ThisSite["Index"]. ")");
+			}
+		}
+		if ($Date == $NullDate) continue; // We're done with callback slots
+
+		// Add to the Match arrays - used for Callback message if more than 1 in array
+		$email_match = $phone_match = false;
+		$phone_match = (($Phone > "000-000-0000") and (isset($SaveMatchLoc["Phone"][$Phone])));
+		$email_match = (($Email and isset($SaveMatchLoc["Email"][$Email])));
+		if (($phone_match) and ($email_match)) {
+			array_push($SaveMatchLoc["Phone"][$Phone], $ThisSite["Index"] . "|AE|$Name");
+		}
+		else if ($phone_match) {
+			array_push($SaveMatchLoc["Phone"][$Phone], $ThisSite["Index"] . "|A|$Name");
+		}
+		else if ($email_match) {
+			array_push($SaveMatchLoc["Email"][$Email], $ThisSite["Index"] . "|A|$Name");
+		}
+
+		if ($ThisSite["Show"]) {
+
+				// Initalize for counting slots with dates other that NullDate
 				$DPART = explode("-", $Date);
 				$YR = $DPART[0];
 				$MO = $DPART[1];
@@ -897,100 +965,105 @@ function Calc_Slots() {
 					$OldDate = "";
 				}
 				$OldDate = $Date;
-				$DateTimeLoc = $Date . $Time . $Location;
+				$DateTimeLoc = $Date.$Time.$Location;
 
 				// DateFlag: 0 = busy, 1 = available, 2 = self-scheduled
-				$DateFlag[$Date] = max(@$DateFlag[$Date], 1); // could already be a 2
+				$DateFlag[$Date] = max(($DateFlag[$Date] ?? 0), 1); // could already be a 2
 
-				// Is USER the latest status entry?
+				// Is USER the most recent status entry?
 				Check_UserClassFlags("A", $Status);
 				if ($DateClassFlag) $DateFlag[$Date] = 2;
 
 				// Find the first empty slot
-				if (! isset($DateList[$DateTimeLoc])) $DateList[$DateTimeLoc] = "";
-				if (($Name == "") OR (($ApptView != "ViewUser") AND ($Name == $RESERVED))) {
+				if ($NameIsNull or (($ApptView != "ViewUser") and $NameIsRes)) {
 					if ($Date >= $TodayDate) {
 						if ($FirstSlotDate == "") $FirstSlotDate = $Date;
 						// record the first
-						if ($DateList[$DateTimeLoc] == "") $DateList[$DateTimeLoc] = $Appt;
+						if (($DateList[$DateTimeLoc] ?? "") == "") $DateList[$DateTimeLoc] = $Appt;
 						// override any reserved with an empty slot so it will be chosen first
-						if ($Name == "") $DateList[$DateTimeLoc] = $Appt;
+						if ($NameIsNull) $DateList[$DateTimeLoc] = $Appt;
 					}
 					// set various counts to be used in displays
-					@$DateList[$Date]++;
-					@$DateList[$DateTimeLoc . "Count"]++;
-					if ($Name == $RESERVED) {
-						@$DateList[$Date . "ResCount"]++;
-						@$DateList[$DateTimeLoc . "ResCount"]++;
+					$DateList[$Date] = ($DateList[$Date] ?? 0) + 1;
+					$DateList[$DateTimeLoc . "OpenCount"] = ($DateList[$DateTimeLoc . "OpenCount"] ?? 0) + 1;
+					if ($NameIsRes) {
+						$DateList[$Date . "ResCount"] = ($DateList[$Date . "ResCount"] ?? 0) + 1;
+						$DateList[$DateTimeLoc . "ResCount"] = ($DateList[$DateTimeLoc . "ResCount"] ?? 0) + 1;
+						if ($Date >= $TodayDate) $ThisSite["ResCount"]++;
 					}
 				}
 				else {
-					//@$DateList[$Date]++;
-					@$DateList[$Date . "Busy"]++;
-					@$DateList[$DateTimeLoc . "Busy"]++;
+					$DateList[$Date] = ($DateList[$Date] ?? 0) + 1;
+					$DateList[$Date . "Busy"] = ($DateList[$Date . "Busy"] ?? 0) + 1;
+					$DateList[$DateTimeLoc . "Busy"] = ($DateList[$DateTimeLoc . "Busy"] ?? 0) + 1;
+					$ThisSite["BusyCount"]++;
+					if (strpos($Status, '(USER')) $ThisSite["InetCount"]++; // matches (USER) and (USER.)
 				}
-				@$DateLoc[$Date] .= ", $Location";
-				@$LocationEmpty[$LocationIndex]++;
-			}
 
+				if ($Date >= $TodayDate) $ThisSite["AvailCount"]++; // Total open appointments
 
+				//@error_log("TSC: " . $Date . ": #=" . $DateList[$Date] . ", Busy=" . $DateList[$Date . "Busy"] . ", Res=" . $DateList[$Date . "ResCount"] . ", SiteRes=" . $ThisSite["ResCount"] . ", " . $ThisSite['Index'] . ", " . $ThisSite['Name'] . ", " . $Name); // DEBUG
 
 			// Find the maximum wait sequence value from the callback lists
 			$WaitSeq = $row["appt_wait"];
 			if ($WaitSeq > $_SESSION["MaxWaitSequence"]) $_SESSION["MaxWaitSequence"] = $WaitSeq;
 		}
-	}
-	$appointments = []; // release the memory used
 
-	Make_Calendar();
-
-	echo "</div></div></div>\n";
-
-	if ($FirstSlotDate == "") $FirstSlotDate = $Date;
-
-	// Add a blank Callback slot for any site that doesn't have one
-	for ($j = 1; $j <= $LocationList[0]; $j++) {
-		if ((! @$AvailableCBSlots[$j]) & (@$LocationShow[$j])) {
-			InsertNewAppt('', '', '', '', '', '', '', '', $NullDate, $NullTime, $LocationList[$j], 'SYSTEM');
-			if ($_SESSION["TRACE"]) {
-				error_log("APPT: SYSTEM, Added blank record for site " . $LocationList[$j]);
+		else {
+			// Get the site data for sites not being displayed
+			if ($NameIsBusy) { // Counts all
+				$ThisSite["BusyCount"]++;
+				if (strpos($Status, '(USER')) $ThisSite["InetCount"]++; // matches (USER) and (USER.)
+			}
+			else if ($Date >= $TodayDate) { // Counts remaining scheduled
+				if ($NameIsNull or $NameIsRes) $ThisSite["AvailCount"]++;
+				if ($NameIsRes) $ThisSite["ResCount"]++;
 			}
 		}
 	}
+	unset($appointments);
+
+	Make_Calendar();
+
+	if ($FirstSlotDate == "") $FirstSlotDate = $Date;
+
+	echo "</div></div></div>\n";
+
 }
 
 //===========================================================================================
-function User_view_list () {
+function User_view_list ($Location) {
 //===========================================================================================
-	global $Appt, $Date, $Time, $Name, $Type;
+	global $Appt, $Date, $Time, $Name;
 	global $Phone, $UserPhone;
 	global $Email, $UserEmail;
 	global $TodayDate, $NullDate;
 	global $CustEList, $CustPList;
-	global $LocationName, $LocationIndex;
-	global $DeleteCode;
+	global $Site;
+	global $isDeleted, $isArchived;
 
-	if ($Type == $DeleteCode) return;
-	if ($Name == "") return;
-	if (($Date < $TodayDate) AND ($Date != $NullDate)) return;
+	$ThisSite = $Site["S" . $Location];
 
-	$phonematch = (($Phone != "") AND ($Phone != "000-000-0000") AND ($Phone == $UserPhone)) ? true : false;
-	$emailmatch = (($Email != "") AND ($Email == $UserEmail)) ? true : false;
+	if ($isDeleted or $isArchived or ($Name == "")) return;
+	if (($Date < $TodayDate) and ($Date != $NullDate)) return;
+
+	$phonematch = (($Phone != "") and ($Phone != "000-000-0000") and ($Phone == $UserPhone)) ? true : false;
+	$emailmatch = (($Email != "") and ($Email == $UserEmail)) ? true : false;
 	if ($emailmatch) {
-		$At = $LocationName[$LocationIndex];
+		$At = $ThisSite["Name"];
 		if ($Date == $NullDate) {
 			$CustEList .= "&bull; On the callback list at the $At\n";
 			$CustEList .= " (<span class='custDelete' onclick='Cust_Delete($Appt, \"On the callback list at the $At\")'>&nbsp;Cancel&nbsp;</span>)\n<br />";
 		}
 		else {
 			$ShowTime = Format_Time($Time, false);
-			$ShowDate = Format_Date($Date, true);
+			$ShowDate = Format_Date($Date, "Show weekday");
 			$CustEList .= "&bull; $ShowTime on $ShowDate at the $At\n";
 			$CustEList .= " (<span class='custDelete' onclick='Cust_Delete($Appt, \"$ShowTime on $ShowDate at the $At\")'>&nbsp;Cancel&nbsp;</span>)\n<br />";
 		}
 	}
 	else if ($phonematch) {
-		$At = $LocationName[$LocationIndex];
+		$At = $ThisSite["Name"];
 		if ($Date == $NullDate) {
 			$CustPList .= "&bull; " . _Show_Chars($Name, "text");
 			$CustPList .= ", on the callback list at the $At\n";
@@ -998,7 +1071,7 @@ function User_view_list () {
 		}
 		else {
 			$ShowTime = Format_Time($Time, false);
-			$ShowDate = Format_Date($Date, true);
+			$ShowDate = Format_Date($Date, "Show weekday");
 			$CustPList .= "&bull; " . _Show_Chars($Name, "text");
 			$CustPList .= ", at $ShowTime on $ShowDate at the $At\n";
 			$CustPList .= " (<span class='custDelete' onclick='Cust_Delete($Appt, \"$ShowTime on $ShowDate at the $At\")'>&nbsp;Cancel&nbsp;</span>)\n<br />";
@@ -1007,163 +1080,110 @@ function User_view_list () {
 }
 
 //===========================================================================================
-function Add_to_matchlist( $Name, $Email, $Phone, $Appt, $Date, $Time, $LocationSIndex) {
-//===========================================================================================
-	global $FormApptEmail;
-	global $FormApptName;
-	global $FormApptDate, $FormApptTime;
-	global $FormApptPhone;
-	global $FormApptReason;
-	global $FormApptNo;
-	global $LocationName;
-	global $OtherAppts;
-	global $SiteNameList;
-	global $NullDate;
-	global $RESERVED;
-
-	if (($Date == $FormApptDate) && ($Time == $FormApptTime)) return; // Skip, this is me
-	if ($Name == $RESERVED) return; // Don't match on reserved slots
-
-	// Is there a name, phone or email match?
-	$npematch = false;
-	if (($Email != "") AND ($Email == $FormApptEmail)) $npematch = true;
-	else if (($Name  != "") AND (strcasecmp($Name, $FormApptName) == 0)) $npematch = true;
-	else if ((($Phone != "") AND ($FormApptPhone != ""))
-		AND (($Phone == $FormApptPhone)
-		OR strpos(" " . $Phone, $FormApptPhone)
-		OR strpos(" " . $FormApptPhone, $Phone))) $npematch = true;
-	$At = (isset($SiteNameList[$LocationSIndex])) ? $SiteNameList[$LocationSIndex] : "Unknown";
-
-	// Make a list of other appointments with that same phone or email
-	if ($npematch AND ($FormApptReason == "Add") AND ($Appt != $FormApptNo)) {
-		// Do not convert characters back to ASCII in this loop
-		if ($Date == $NullDate) {
-			$OtherAppts .= ($Name . "\\n  on Callback list at the $At\\n");
-		}
-		else {
-			$ShowTime = Format_Time($Time, true);
-			$ShowDate = str_replace("-", "/", substr($Date, 5, 5));
-			$OtherAppts .= ($Name . "\\n  $ShowDate at $ShowTime at the $At\\n");
-		}
-	}
-}
-
-//===========================================================================================
 function Location_Checkboxes() {
+//	For ViewUser view, sites are displayed if using Inet and is open or will open soon
+//	For other views, sites are displayed if the site's "Show" property is not blank
 //===========================================================================================
 	global $Debug, $Errormessage;
 	global $dbcon, $USER_TABLE;
-	global $ApptView, $ADD_APP, $ADD_CB, $VIEW_CB;
-	global $LocationList, $LocationShow, $LocationInet, $LocationName;
-	global $LocationOpen, $LocationClosed, $TodayDate;
-	global $UserOptions, $SitePermissions, $SingleSite;
+	global $ApptView, $ADD_APP, $ADD_CB, $VIEW_CB, $VIEW_APP;
+	global $Site;
+	global $isAdministrator;
+	global $TodayDate;
 	global $ShowDagger;
-	global $Errormessage;
-	global $FormApptLoc;
-	global $UserSitelist;
-	global $LocationIsOpen;
-	global $calBoxTop;
+	global $SiteListCount;
+	global $UserIndex;
+	global $UserSiteShow;
 
-	$NewUserSitelist = "";
+	$NewUserSiteShow = "";
+	$SiteListCount = 0; // Counts sites accessible to the user
+	$SiteSelected = false;
 
-	if ($LocationList[0] > 0) {
-		echo "<div id='SiteBoxDiv'>";
-		echo "<table id='site_table'>\n";
-		$SingleSite = "";
-		$SiteSelected = false;
-		for ($j = 1; $j <= $LocationList[0]; $j++) {
-			$checked = "";
-			$SiteFlag = "";
-			$disabled = "";
-			if ((($ApptView != "ViewUser") OR $LocationIsOpen[$j]) AND ($LocationList[0] == 1)) {
-			      	$LocationShow[1] = 1; // if only one, show it
-			}
-			if ($LocationShow[$j] == 1) {
-				$checked = "checked='checked'";
-				if (! $SingleSite) $SingleSite = $LocationList[$j];
-				$NewUserSitelist .= "|" . $LocationList[$j];
-				$SiteSelected = true;
-			}
-			$SiteDBno = "S" . $LocationList[$j];
-			$SitePermission = (isset($SitePermissions[$SiteDBno])) ? $SitePermissions[$SiteDBno] : 0;
-			$color = "black";
+	echo "<div id='SiteBoxDiv'>";
+	// Add ALL and NONE buttons for the adminstrator
+	if ($isAdministrator and ($ApptView !== "ViewUser")) {
+		echo '<button style="margin:2px;" value="ALL" onclick="Change_Loc(this.value,)">SELECT ALL</button> 
+			<button style="margin:2px;" value="NONE" onclick="Change_Loc(this.value,)">SELECT NONE</button>';
+	}
 
-			if ($UserOptions !== "A") {
-				switch ($ApptView) {
-					case "ViewUser":
-						if ($LocationInet[$j] == "C") {
-							$SiteFlag = "&dagger;";
-							$ShowDagger = true;
-						}
-						if ($LocationOpen[$j] > $TodayDate) {
-							$checked =
-							$disabled = "disabled='disabled'";
-							$ShowDate = Format_Date($LocationOpen[$j], false);
-							$SiteFlag .= "<br />(try again on $ShowDate)";
-							$color = "grey";
-						}
-						if ($LocationClosed[$j] < $TodayDate) {
-							$checked =
-							$disabled = "disabled='disabled'";
-							$SiteFlag .= "<br />(reservations closed)";
-							$color = "grey";
-						}
-						break;
-					case "ViewSummary":
-						if ($SitePermission == 0) {
-							$checked = "disabled";
-							$LocationShow[$j] = 0;
-						}
-						break;
-					case "ViewDeleted":
-					case "ViewDaily":
-						if (! ($SitePermission & $ADD_APP)) {
-							$checked = "disabled";
-							$LocationShow[$j] = 0;
-						}
-						break;
-					case "ViewCallback":
-						if (! ($SitePermission & $VIEW_CB)) {
-							$checked = "disabled";
-							$LocationShow[$j] = 0;
-						}
-						break;
-				}
+	// Create a table of sites for selection
+	echo "<table id='site_table'>\n";
+
+	foreach ($Site as $SiteKey => $ThisSite) {
+
+		if (($ApptView != "ViewUser") and ($ThisSite["Permissions"] == 0)) continue; // Skip if no permissions
+
+		$SiteNote = "";
+		$disabled = "";
+		$color = "black";
+		$checked = "checked='checked'";
+
+		// Should the info for this site be shown
+		$checked = $ThisSite["Show"];
+
+
+		switch ($ApptView) {
+		case "ViewUser":
+			if (($ThisSite["Inet"] == "") // T/F Not using internet appointments
+				OR (($ThisSite["ClosedDate"] ?? 0) < $TodayDate)) continue 2 ; // Closed date passed
+			$InetPart = explode(":", $ThisSite["Inet"]);
+			if ($InetPart[0] == "C") {
+				$SiteNote = "&dagger;";
+				$ShowDagger = true;
 			}
-			if ($ApptView == "ViewUser") {
-				if ($LocationInet[$j]) {
-					echo "<tr $disabled><td><input id='Loc$j' type='radio' name='Loc00' $checked value='$j' onchange='Change_Loc(Loc$j, $j)'/></td><td id='LocName$j' style='color: $color;'>" . $LocationName[$j] . " $SiteFlag</td></tr>\n";
-			}	}
-			else {
-				echo "<tr><td><input id='Loc$j' type='checkbox' $checked value='$j' onchange='Change_Loc(Loc$j, $j)'/></td><td id='LocName$j'>" . $LocationName[$j] . "</td></tr>\n";
+			if (($ThisSite["OpenDate"] ?? 0) >= $TodayDate) {
+				$checked = $disabled = "disabled";
+				$ShowDate = Format_Date($ThisSite["OpenDate"], false);
+				$SiteNote .= "<br />(try again on $ShowDate)";
+				$color = "grey";
 			}
+			break;
+		case "ViewDeleted":
+		case "ViewDaily":
+			if (! ($ThisSite["Permissions"] & $VIEW_APP)) $checked = "disabled";
+			break;
+		case "ViewCallback":
+			if (! ($ThisSite["Permissions"] & $VIEW_CB)) $checked = "disabled";
+			break;
 		}
-		echo "</table>\n";
-		echo "</div>\n";
-	}
 
-	// Save the user's selection of sites
-	$NewUserSitelist .= "|";
-	if ($NewUserSitelist != @$_SESSION["UserSiteList"]) {
-		$MyUserIndex = $_SESSION["UserIndex"];
-		$_SESSION["UserSiteList"] = $NewUserSitelist;
+		$TSI = $ThisSite["Index"];
+		if ($checked == "checked") $NewUserSiteShow .= "|$TSI";
+		++$SiteListCount;
+		//error_log("USERAD: " . $ThisSite["Index"] . ", Inet=" . $ThisSite["Inet"] . ", checked=$checked, " . $ThisSite["Name"]); /*DEBUG*/
+
+		if ($ApptView == "ViewUser") {
+			if ($ThisSite["Inet"]) {
+				echo "<tr $disabled><td><input id='Loc$SiteListCount' type='radio' name='Loc00' $checked value='$TSI' onchange='Change_Loc(this.id, this.value)' /></td><td id='LocName$TSI' style='color: $color;'>" . $ThisSite["Name"] . " $SiteNote</td></tr>\n";
+		}	}
+		else {
+			echo "<tr><td><input id='Loc$SiteListCount' type='checkbox' $checked value='$TSI' onchange='Change_Loc(this.id, this.value)'/></td><td id='LocName$TSI'>" . $ThisSite["Name"] . "</td></tr>\n";
+		}
+	}
+	echo "</table>\n";
+
+	// Save the number of sites listed so it's accessible to js routines
+	echo "<input id='Loc0' value='$SiteListCount' class='hidden' />\n</div>\n";
+
+	// Save the user's selection of sites in the user's record
+	$NewUserSiteShow .= "|";
+	if ($NewUserSiteShow != $UserSiteShow) {
 		$query = "UPDATE $USER_TABLE SET";
-		$query .= " `user_sitelist` = '$NewUserSitelist'";
-		$query .= " WHERE `user_index` = $MyUserIndex";
+		$query .= " `user_sitelist` = '$NewUserSiteShow'";
+		$query .= " WHERE `user_index` = $UserIndex";
 		mysqli_query($dbcon, $query);
+		$_SESSION["User"]["user_sitelist"] = $UserSiteShow = $NewUserSiteShow;
 	}
-
 }
 
 //===========================================================================================
 function Make_Calendar() {
-//	Creates a calendar beginning with the earliest appointment to the last appt + 1 month
+//	Creates a calendar beginning with the earliest appointment to the last appt + 6 months
 //===========================================================================================
 	global $Debug, $Errormessage;
 	global $BgColor;
 	global $DateList;
 	global $DateFlag;
-	global $DateLoc;
 	global $DateIndex;
 	global $TodayDate;
 	global $FirstMonth, $LastMonth;
@@ -1171,6 +1191,10 @@ function Make_Calendar() {
 	global $ApptView;
 	global $MaxPermissions, $ADD_APP;
 	global $isAdministrator, $isManager;
+
+	// No calendar display for the internet user,
+	// the entire column is available for the site list
+	if ($ApptView == "ViewUser") return;
 
 	if ($FirstYear == 0) {
 		$YR = date("Y");
@@ -1180,7 +1204,16 @@ function Make_Calendar() {
 	else {
 		$YR = $FirstYear; //$_SESSION["CalStartYr"];
 		$MO = $FirstMonth - 1; //$_SESSION["CalStartMo"] - 1;
-		$StopAt = $LastYear . $LastMonth;
+		if ($MO == 0) {
+			$MO = 12;
+			$YR -= 1;
+		}
+		$LastMonth = $LastMonth + 6;
+		if ($LastMonth > 12) {
+			$LastMonth -= 12;
+			$LastYear++;
+		}
+		$StopAt = sprintf("%02d%02d", $LastYear, $LastMonth);
 	}
 	
 	while (($YR . $MO) <= ($StopAt)) {
@@ -1197,8 +1230,9 @@ function Make_Calendar() {
 		if (strlen($MO) == 1) $MO = "0" . $MO;
 		$MonthIndex = $YR . "-" . $MO;
 
-		echo "<table class='calTable'>\n";
-		echo "<tr id='ID$MonthIndex' class='calMonth'> <th colspan='5'>" . $MON . "</th> <th colspan='2'>" . $YR . "</th></tr>\n";
+		$Caltable = "";
+		$Caltable .= "<table class='calTable'>\n";
+		$Caltable .= "<tr id='ID$MonthIndex' class='calMonth'> <th colspan='5'>" . $MON . "</th> <th colspan='2'>" . $YR . "</th></tr>\n";
 		$d_index = 1 - $DOW;
 		for ($w = 1; $w < 7; $w++) {
 			$w_html = "";
@@ -1206,13 +1240,14 @@ function Make_Calendar() {
 				if (strlen($d_index) == 1) $DY = "0" . $d_index; else $DY = $d_index;
 				$DateIndex = $YR . "-" . $MO . "-" . $DY;
 				$DateBorder = ($DateIndex == $TodayDate) ? "style='border: 2px solid darkgreen;'" : "";
-				if (($d_index < 1) OR ($d_index > $LDM)) {
+				if (($d_index < 1) or ($d_index > $LDM)) {
 					$w_html .= "<td id='ID$DateIndex' class=\"calNoAppt\" $DateBorder> </td>\n";
 				}
 				else {
 					$clickop = "";
 					$myclass = "";
-					$AvailAppts = @$DateList[$DateIndex]; // may not be one of our dates
+					$AvailAppts = ($DateList[$DateIndex] ?? 0) - ($DateList[$DateIndex . "Busy"] ?? 0);
+							
 
 					# Set up click action if appropriate
 					if ($isAdministrator
@@ -1225,13 +1260,13 @@ function Make_Calendar() {
 					}
 
 					// set up title for the date
-					if (($AvailAppts == 0) OR ($DateIndex < $TodayDate)) {
+					if (($AvailAppts == 0) or ($DateIndex < $TodayDate)) {
 						$mytitle = "No appointments are available";
 						$myclass .= " calNoAppt";
 					}
 					else {
 						$mytitle = $AvailAppts . " appointment" . plural($AvailAppts) . " available";
-						$ResAppts = @$DateList[$DateIndex . "ResCount"];
+						$ResAppts = $DateList[$DateIndex . "ResCount"] ?? 0 ;
 						if ($ResAppts) {
 							$mytitle .= "\n\t$ResAppts of which " . isare($ResAppts) . " reserved";
 						}
@@ -1239,31 +1274,22 @@ function Make_Calendar() {
 
 					$mytitle = "title=\"$mytitle\""; // envelope the mytitle string
 
-					// set up colors, and pointers
-					if (@$DateFlag[$DateIndex] > 0) { // there are appointments on this date
+					// set up colors and links to the Daily View
+					// For the calendar, we won't use the "some reserved" color - it's not helpful
+					if (($DateFlag[$DateIndex] ?? 0) > 0) { // there are appointments on this date
 						$myclass = "";
 
-						if ($ApptView != "ViewUser") {
-							// set background
-							$myclass = " apptFull";
-							if ($AvailAppts AND ($DateIndex >= $TodayDate)) {
-								$myclass = " apptOpen";
-							       	if (@$ResAppts) {
-									$myclass = ($ResAppts == $AvailAppts) ? " apptWarn" : " apptOpen";
-								}
-							}
-
-							// highlight user-made appt date text:
-							if ($DateFlag[$DateIndex] == 2) $myclass .= " apptUser";
-						}
-						else { // ViewUser - hide date colors and click ability from user
-							$mytitle = "";
-							$myclass = " noSelect";
-							if ($AvailAppts AND ($DateIndex >= $TodayDate)) {
-								$myclass .= " apptOpen";
+						// set background
+						$myclass = " apptFull";
+						if ($AvailAppts and ($DateIndex >= $TodayDate)) {
+							$myclass = " apptOpen";
+						       	if (($ResAppts ?? 0) > 0) {
+								$myclass = ($ResAppts == $AvailAppts) ? " apptWarn" : " apptOpen";
 							}
 						}
 
+						// highlight user-made appt date text:
+						if ($DateFlag[$DateIndex] == 2) $myclass .= " apptUser";
 					}
 					$myclass = "class=\"calDate" . $myclass . "\""; // envelope the myclass string
 
@@ -1274,9 +1300,10 @@ function Make_Calendar() {
 				if ($d_index > $LDM) $w = 7; // don't do another loop
 			}
 			// Write the week
-			echo "<tr>\n" . $w_html . "</tr>\n";
+			$Caltable .= "<tr>\n" . $w_html . "</tr>\n";
 		}
-		echo "</table>\n";
+		$Caltable .= "</table>\n";
+		echo $Caltable;
 	}
 }
 
@@ -1311,7 +1338,7 @@ function Add_Wait_Slots($SlotCount, $SlotLoc) {
 		InsertNewAppt($ResName, '', '', '', '', '', $Status, $MaxWaitSequence, $NullDate, $NullTime, $SlotLoc, $UserFullName);
 	}
 
-	$appointments = []; // release the memory used
+	unset($appointments); // release the memory used
 }
 //===========================================================================================
 function isare($val) {
@@ -1325,23 +1352,26 @@ function plural($val) {
 }
 
 //===========================================================================================
-function Check_UserClassFlags($Type, $Status) {
+function Check_UserClassFlags($QCode, $Status) {
+//	$QCode = "A" is checking to see which format to use for the status box (not if Archived)
+//	$QCode = "D" or "" is checking for deleted vs callback record formatting
 //===========================================================================================
 	global $Debug, $Errormessage;
 	global $DeletedClassFlag, $CallbackClassFlag;
-	global $DateClassFlag, $DeleteCode;
+	global $DateClassFlag;
 	$DateClassFlag = false;
+
 
 	// Is USER the latest status entry?
 	$a = strpos($Status, "%0A");
 	if ($a) $b = substr($Status, 0, $a);
 	else $b = $Status;
 	if (strpos($b, "(USER)") > 0) {
-		switch ($Type) {
+		switch ($QCode) {
 		case "A":
 			$DateClassFlag = true;
 			break;
-		case $DeleteCode:
+		case "D";
 			$DeletedClassFlag = true;
 			break;
 		default:
@@ -1350,38 +1380,57 @@ function Check_UserClassFlags($Type, $Status) {
 	}
 }
 
-
 //===========================================================================================
-function Add_CB_Status($LTitle, $LocationIndex) {
-// Addes the callback list status onto the given appointment list title line
+function List_Locations($disableFilter) {
+// Lists locations that the user can manage
+// 	disableFilter is either $ADD_CB or $ADD_APP depending on where the list created
 //===========================================================================================
 	global $Debug, $Errormessage;
-	global $LocationEmpty, $LocationCBList, $ApptView;
-	
-	if ($ApptView != "ViewUser") {
-		$CBAmount = +@$LocationCBList[$LocationIndex];
-		$LColor = (($CBAmount > 0) AND (+@$LocationEmpty[$LocationIndex] <= $CBAmount)) ? "yellow" : "transparent";
-		$LTitle .= "<span style='position: absolute; right: 0.5em; background-color: $LColor;'>";
-		$LTitle .= "(" . +@$LocationCBList[$LocationIndex] . " on Callback list)</span>";
+	global $Site, $UserHome;
+	global $ADD_APP, $ADD_CB, $ADMINISTRATOR, $MANAGER;
+
+	foreach ($Site as $SiteKey => $ThisSite) {
+		if ($ThisSite["Permissions"]) {
+			switch ($disableFilter) {
+			case "$ADD_APP": // Only admins and managers can add slots to appt schedules
+				$Disabled = ($ThisSite["Permissions"] & ($ADMINISTRATOR | $MANAGER)) ? "" : "disabled" ;
+				break;
+			case "$ADD_CB": // others can add CB slots if the have permission to do so
+				$Disabled = ($ThisSite["Permissions"] & $ADD_CB) ? "" : "disabled" ;
+				break;
+			default: $Disabled = "";
+			}
+			// Always default to the user's home
+			$Selected = ($ThisSite["Index"] == $UserHome) ? "selected='selected'" : "";
+			echo "<option class='locmanage' value='" . $ThisSite["Index"]. "' $Selected $Disabled>" . $ThisSite["Name"] . "</option>\n";
 		}
-	return ($LTitle);
+	}
 }
 
 //===========================================================================================
-function List_Locations($SelectLocation) {
-// Lists locations that the user can manage
+function Excel_Export() {
 //===========================================================================================
-	global $Debug, $Errormessage;
-	global $LocationList, $LocationName;
-	global $UserOptions, $SitePermissions, $MANAGER;
+	global $UserName, $UserIndex, $ApptView, $FormApptShow;
+	global $FormApptNo, $FormApptReason;
+	global $dbcon, $USER_TABLE;
 
-	for ($j = 1; $j <= $LocationList[0]; $j++) {
-		$SiteDBno = "S" . $LocationList[$j];
-		$SitePermission = @$SitePermissions[$SiteDBno];
-		if (($UserOptions === "A") or (@$SitePermission & $MANAGER)) {
-			$Selected = ($LocationList[$j] == $SelectLocation) ? "selected=\"selected\"" : "";
-			echo "<option class='locmanage' value='" . $LocationList[$j]. "' $Selected>" . $LocationName[$j] . "</option>\n";
-		}
+	// Create the export file
+	$url = "excelexport.php?UserSiteList=" . trim($FormApptShow, ",") . "&ExportList=" . $FormApptReason;
+	echo '<meta http-equiv=refresh content="1; '. $url . '">';
+
+	// Remove the date from the export field list if there is one, don't want to save that
+	$OneDate = strpos($FormApptReason, "|ONEDATE:");
+	if ($OneDate > 0) $FormApptReason = substr($FormApptReason, 0, $OneDate);
+
+	// Save the export list format in the user's record for subsequent default
+	$query = "UPDATE $USER_TABLE SET";
+	$query .= " `user_excel_export` = '$FormApptReason'";
+	$query .= " WHERE `user_index` = $UserIndex";
+	mysqli_query($dbcon, $query);
+	$_SESSION["User"]["user_excel_export"] = $FormApptReason;
+
+	if ($_SESSION["TRACE"]) {
+		error_log("APPT: $UserName, view=$ApptView, action=export $FormApptNo");
 	}
 }
 
@@ -1389,9 +1438,6 @@ function List_Locations($SelectLocation) {
 function List_Patterns() {
 // Lists patterns that the user can use
 //===========================================================================================
-	global $LocationList;
-	global $SiteNameList;
-	global $UserOptions;
 	global $CurrentLocation;
 	global $dbcon, $SCHED_TABLE, $SITE_TABLE;
 	global $UserHome;
@@ -1416,7 +1462,7 @@ function List_Patterns() {
 			}
 			$oldLoc = $patternLoc;
 		}
-		if (($patternId > 0) AND ($patternLoc != "")) {
+		if (($patternId > 0) and ($patternLoc != "")) {
 			echo "\n\n<option value='$patternLoc|$patternId|$patternData'>$patternName</option>\n";
 		}
 	}
@@ -1427,12 +1473,7 @@ function List_Patterns() {
 function Send_Email($Request, $View, $Name, $Email, $Date, $Time, $Location) {
 //===========================================================================================
 	global $Debug, $Errormessage;
-	global $LocationName;
-	global $LocationLookup;
-	global $LocationMessage;
-	global $LocationAddress;
-	global $LocationContact;
-	global $LocationAttachText;
+	global $Site;
 	global $SystemAttachList;
 	global $NullDate;
 	global $EM_Reason;
@@ -1443,53 +1484,49 @@ function Send_Email($Request, $View, $Name, $Email, $Date, $Time, $Location) {
 	global $dt1, $un1;
 	global $TodayDate;
 	global $dbcon, $APPT_TABLE;
+	global $FindByVal;
 
 	// Should we send email
 	if ($Email == "") return; // no email address to send to
-	$LocIndex = $LocationLookup["S" . $Location];
-	$msg = $LocationMessage[$LocIndex];
-	if (substr($msg, 0, 4) == "NONE") return; // messaging has been disabled
 
-	$SiteAddress = explode("|", $LocationAddress[$LocIndex]);
+	$ThisSite = $Site["S" . $Location];
+	$msg = $ThisSite["Message"];
+	if (substr($msg, 0, 4) == "NONE") return; // messaging has been disabled
 
 	$Time = Format_Time($Time, true);
 
 	$to = htmlspecialchars_decode($Email ?? '');
 
-	$from = (isset($SiteAddress[5]) AND ($SiteAddress[5] != "")) ? $SiteAddress[5] : @$_SESSION["SystemEmail"];
-	/*if ($from == "")*/ $from = "no-reply@tax-aide-reservations.no-email";
-	$from = htmlspecialchars_decode($from ?? '');
+	//$from = ($EM = $ThisSite["Email"] != "") ? $EM : ($_SESSION["SystemEmail"] ?? '');
+	/*if ($from == "")*/
+	$from = "no-reply@tax-aide-reservations.no-email";
 
-	$headers = "From: " . $LocationName[$LocIndex] . " Tax-Aide <" . $from . ">";
+	$headers = "From: " . $ThisSite["Name"] . " Tax-Aide <" . $from . ">";
 	
 	$subject = "Your Tax-Aide appointment";
 
 	switch ($Request) {
 		case "Add":
+		case "MoveAndReserve":
 		case "Move":
 		case "Copy":
-			if ($LocationMessage[$LocIndex] > "A") {
-				$message = $LocationMessage[$LocIndex];
-			}
-			else {
-				$message = $_SESSION["DefaultEmail"];
-			}
+			$message = ($msg > "A") ? $msg : $_SESSION["DefaultEmail"] ;
 			$message = _Show_Chars($message,"text");
 
 			$message = str_replace("[TPNAME]",      $Name, $message);
 			$message = str_replace("[TIME]",        $Time, $message);
 			$message = str_replace("[DATE]",        $Date, $message);
-			$message = str_replace("[SITENAME]",    $LocationName[$LocIndex], $message);
-			$message = str_replace("[ADDRESS]",     $SiteAddress[0], $message);
-			$message = str_replace("[CITY]",        $SiteAddress[1], $message);
-			$message = str_replace("[STATE]",       $SiteAddress[2], $message);
-			$message = str_replace("[ZIP]",         $SiteAddress[3], $message);
-			$message = str_replace("[PHONE]",       $SiteAddress[4], $message);
-			$message = str_replace("[EMAIL]",       $SiteAddress[5], $message);
-			$message = str_replace("[WEBSITE]",     $SiteAddress[6], $message);
+			$message = str_replace("[SITENAME]",    $ThisSite["Name"], $message);
+			$message = str_replace("[ADDRESS]",     $ThisSite["Address"], $message);
+			$message = str_replace("[CITY]",        $ThisSite["City"], $message);
+			$message = str_replace("[STATE]",       $ThisSite["State"], $message);
+			$message = str_replace("[ZIP]",         $ThisSite["Zip"], $message);
+			$message = str_replace("[PHONE]",       $ThisSite["Phone"], $message);
+			$message = str_replace("[EMAIL]",       $ThisSite["Email"], $message);
+			$message = str_replace("[WEBSITE]",     $ThisSite["Website"], $message);
 			$message = str_replace("[STATESITE]",   $_SESSION["SystemURL"], $message);
-			$message = str_replace("[CONTACT]",     $LocationContact[$LocIndex], $message);
-			$message = str_replace("[ATTACHMENTS]", $LocationAttachText[$LocIndex], $message);
+			$message = str_replace("[CONTACT]",     $ThisSite["Contact"], $message);
+			$message = str_replace("[ATTACHMENTS]", $ThisSite["Attachments"], $message);
 			for ($lax = 0; $lax < sizeof($SystemAttachList)-1; $lax++) {
 				$sap = explode("=", $SystemAttachList[$lax]);
 				$testShortcode = "[$sap[0]]";
@@ -1522,7 +1559,6 @@ function Send_Email($Request, $View, $Name, $Email, $Date, $Time, $Location) {
 
 		$success = mail($to, $subject, $message, $headers);
 		$message = $headers . "\n" . "To: " . $to . "\n" . $message;
-		mail("appt@bogarthome.net", $subject, $message, $headers);
 		if (! $success) {
 			$Errormessage .= "Not able to send email to $Name at $Email.";
 			$emerr = $success . ": " . error_get_last()['message'];
@@ -1530,10 +1566,11 @@ function Send_Email($Request, $View, $Name, $Email, $Date, $Time, $Location) {
 		}
 		else {
 			$FormApptStatus = "$dt1: Email sent to $Email ($un1)%0A$FormApptStatus";
+			$ApptID = ($FormApptNo == "FindByPhoneOrEmail") ?  $FindByVal : $FormApptNo ;
 			$query = "UPDATE $APPT_TABLE SET";
 			$query .= "  `appt_status` = '$FormApptStatus'";
 			$query .= ", `appt_emailsent` = '$TodayDate'";
-			$query .= " WHERE `appt_no` = $FormApptNo";
+			$query .= " WHERE `appt_no` = $ApptID";
 			mysqli_query($dbcon, $query);
 			if ($_SESSION["TRACE"]) {
 				error_log("APPT: " . $UserName . ", Email to ". $Email . " " . $headers);
@@ -1611,15 +1648,20 @@ function Do_Search() {
 	global $FormApptTags;
 	global $FormApptName;
 	global $APPT_TABLE;
-	global $SearchList;
-	global $UserOptions;
+	global $Searchlist;
 	global $NullDate;
 	global $dbcon;
-	global $FindByVal;
-	global $DeleteCode;
+	global $FindByVal; // Saves the string to be searched for. Or, the appt number after an Add
+	global $Site;
 
 	$query = "SELECT * FROM $APPT_TABLE";
 	switch ($FormApptNo) {
+		case "FindByPhoneOrEmail":
+			// This case is used after a successful Add
+			if ($FormApptPhone) $query .= " WHERE `appt_phone` = '$FormApptPhone'";
+			if ($FormApptEmail) $query .= " or `appt_email` = '$FormApptEmail'";
+			//$FindByVal is the newly added appointment number
+			break;
 		case "FindByPhone":
 			$query .= " WHERE `appt_phone` LIKE '%$FormApptPhone%'";
 			$FindByVal = $FormApptPhone;
@@ -1637,83 +1679,137 @@ function Do_Search() {
 			$query .= " WHERE `appt_name` LIKE '%$n%'";
 			$FindByVal = $FormApptName;
 			break;
+		default:
+			return; // Invalid request
 	}
-	$query .= "ORDER BY `appt_location`, `appt_date`, `appt_time`";
+	$query .= " AND `appt_name` != ''";
+	$query .= " ORDER BY `appt_location`, `appt_date`, `appt_time`";
 	$appointments = mysqli_query($dbcon, $query);
 	$j = 0;
-	while($row = mysqli_fetch_array($appointments)) {
-		$Name = $row['appt_name'];
-		$Date = $row['appt_date'];
-		$Time = $row['appt_time'];
-		$Site = $row['appt_location'];
-		$Appt = $row['appt_no'];
-		$Del = $row['appt_type'];
-		if ($Date == $NullDate) {
-			$Time = ($Del == $DeleteCode) ? "deleted" : "callback";
-		}
-		$SearchList[$j++] = array("$Name", "$Date", "$Time", "$Site", "$Appt"); 
-	}	
-
-	$appointments = [];
+	while($row = mysqli_fetch_array($appointments)) $Searchlist[$j++] = $row;
+	unset($appointments);
 }
 
 //===========================================================================================
-function Show_Search() {
+function Show_Searchlist() {
 //===========================================================================================
 	global $Debug, $Errormessage;
-	global $SearchList;
-	global $SiteNameList;
-	global $LocationName;
-	global $LocationLookup;
+	global $Searchlist;
+	global $FormApptName;
+	global $FormApptPhone;
+	global $FormApptEmail;
+	global $FormApptTags;
 	global $FormApptNo;
-	global $UserTables;
+	global $NewYearDay;
+	global $NullDate;
+	global $RESERVED;
+	global $Name_icon, $Phone_icon, $Email_icon, $Tag_icon;
+	global $CheckedBox_icon, $UncheckedBox_icon;
+	global $FindByVal;
+	global $ShowSearchBox;
+	global $Errormessage;
+	global $Site;
+	global $VIEW_APP;
 
-	$tablehead = true;
+	$res = _Show_Chars(_Clean_Chars($RESERVED), "html");
 
 	if (substr($FormApptNo, 0, 6) != "FindBy") return;
 
-	if (isset($SearchList) && count($SearchList) > 0) {
-		$site = 0;
-		for ($j = 0; $j < count($SearchList); $j++) {
-			$found = $SearchList[$j];
-			$mysite = strpos($UserTables, "|" . $found[3] . "|");
-			$checkbox = ($mysite) ? "&#x2611;" : "&#x2610";
-			if ($tablehead) {
-				echo "Click on a name with a checked checkbox (&#x2611) to go there:";
-				echo "<table id='search_table'>\n";
-				echo "<tr><td></td><td></td><td></td><td></td></tr>"; // don't remove - forces formatting
-				$tablehead = false;
+	if (count($Searchlist) > 0) {
+		$result = "";
+		$OKtoPrintHeader = true;
+		$siteNo = 0;
+		for ($j = 0; $j < count($Searchlist); $j++) {
+			$found = $Searchlist[$j];
+			$ThisSite = $Site["S" . $found['appt_location']];
+			$nm0 = _Show_Chars($found['appt_name'], "html");
+
+			// Filter out undesired records
+			if (($nm0 == "") or ($nm0 == $res)) continue; // no name or reserved
+			if ($FormApptNo == "FindByPhoneOrEmail") {
+				if (strpos($found['appt_type'], "D") !== FALSE) continue; // deleted list entries
+				if ($found['appt_no'] == $FindByVal) continue; // this is the added appointment
 			}
-			if ($site != $found[3]) {
-				$LocationSIndex = "S" . $found[3];
-				$LocationIndex = $LocationLookup[$LocationSIndex];
-				echo "<tr><td colspan='4' class='left'><b>" . $SiteNameList[$LocationSIndex] . ":</b></td></tr>\n";
-				$site = $found[3];
+			if (($found['appt_date'] < $NewYearDay) and ($found['appt_date'] != $NullDate)) continue; // skip prior year appointments
+			if ($FormApptNo == "FindByTags") {
+				$foundTags = _Show_Chars($found['appt_tags'], "html");
+				//if (strpos($foundTags, $FormApptTags) === FALSE) continue; // tests upper/lower case matching
+				if (($ThisSite["Permissions"] & $VIEW_APP) == 0) continue;
 			}
-			$dy1 = str_replace("-", "/", substr($found[1], 5, 5));
-			$nm0 = _Show_Chars($found[0], "text");
+
+			if ($OKtoPrintHeader) { // Found the first match to print so print the header and start the table
+				if ($FormApptNo != "FindByPhoneOrEmail") {
+					$result .= "<input id='ShowDeleted' type='checkbox' onchange='Show_Deleted();'/>
+						&larr; Check box to see deleted records";
+				}
+				$result .= "<br />Click on a name with a checked checkbox ($CheckedBox_icon) to go there:<br />";
+				$result .= "<table id='search_table'>\n";
+				$OKtoPrintHeader = false;
+			}
+
+			// Add a site header line
+			if ($siteNo != $ThisSite["Index"]) { // Start of a new site - add a site header
+				$result .= "<tr><td colspan='4' class='search_site'><b>" . $ThisSite["Name"] . ":</b></td></tr>\n";
+				$siteNo = $ThisSite["Index"];
+			}
+
+			// Add the match
+			$mysite = $ThisSite["Permissions"]; // This is a site I can access
+			$checkbox = ($mysite) ? "$CheckedBox_icon" : "$UncheckedBox_icon";
+			$mydisplay  = (strpos($found['appt_type'], "D") !== FALSE) ? "none" : "table-row" ; // must come before noSelect
+			$myclass  = (strpos($found['appt_type'], "D") !== FALSE) ? "deletedrecord " : "" ; // must come before noSelect
+			$myclass .= ($mysite) ? "yesSelect" : "noSelect" ;
+			$dy1 = str_replace("-", "/", substr($found['appt_date'], 5, 5));
+			$dy2 = $dy1 . "/" . substr($found['appt_date'], 2, 2);
 			$view = 11; // daily view
-			if ($dy1 == "01/01") {
-				$tm1 = "On $found[2] list";
-				$view = ($found[2] == "callback") ? 12 : 13; // callback:deleted
+
+			// Add match icons for newly added appointments
+			$ShowSearchBox = false;
+			if ($FormApptNo == "FindByPhoneOrEmail") {
+				$icons = "";
+				//if (strpos($found['appt_name'], $FormApptName) 1== FALSE)  $icons .= (" " . $Tag_icon);
+				if ($found['appt_name'] == $FormApptName)  $icons .= (" " . $Name_icon);
+				if ($FormApptEmail and ($found['appt_email'] == $FormApptEmail)) $icons .= (" " . $Email_icon);
+				if ($FormApptPhone and ($found['appt_phone'] == $FormApptPhone)) {
+					if (($found['appt_phone'] == "000-000-0000") and ($icons == "")) continue;
+					$icons .= (" " . $Phone_icon);
+				}
+				if ($icons) {
+					$nm0 .= $icons;
+					$ShowSearchBox = true;
+				}
+			}
+			else $ShowSearchBox = true;
+
+			// Create the list line
+			if ($dy1 == "01/01") { // Callback or deleted list
+				$view = (strpos($found['appt_type'], "D") !== FALSE) ? 13 : 12; // deleted : callback
+				$tm1 = "On " . (($view == 13) ? "deleted" : "callback") . " list";
 				$data = "<td>$checkbox</td><td>$nm0</td><td colspan='2'>$tm1</td></tr>\n";
 			}
-			else {
+			else { // Regular appointment
 				$tm1 = Format_Time($found[2], false);
-				$data = "<td>$checkbox</td><td>$nm0</td><td>$dy1</td><td>$tm1</td></tr>\n";
+				$data = "<td>$checkbox</td><td>$nm0</td><td>$dy2</td><td>$tm1</td></tr>\n";
 			}
+
+			// Create the list
 			if ($mysite) {
-				echo "<tr onclick=\"New_Date('$found[1]', $view, $LocationIndex, $found[4]);\">\n";
-				echo $data;
+				// Make it clickable
+				$result .= "<tr class='$myclass' style=\"display: $mydisplay;\" onclick=\"New_Date('". $found['appt_date']. "', $view, " . $found['appt_location'] . ", " . $found['appt_no']. ");\">\n";
 			}
-			else {
-				echo "<tr>\n";
-				echo $data;
+			else { // Just show the match
+				$result .= "<tr class='$myclass' style=\"display: $mydisplay;\">\n";
 			}
+			$result .= $data . "</tr>"; // end the row
 		}
-		echo "</table><hr />\n";
+		$result .= "</table>\n";
 	}
-	if ($tablehead) echo "No match found<hr />\n";
+	else {
+		$result = "No match found\n";
+		if ($FormApptNo == "FindByPhone") $result .= "(Did you put dashes in the search digits?)\n";
+		$ShowSearchBox = ($FormApptNo != "FindByPhoneOrEmail"); // T/F
+	}
+	return $result;
 }
 
 //===========================================================================================
@@ -1764,8 +1860,9 @@ function Configure_Slots() {
 	global $FirstSlotDate, $Date, $FormApptDate, $NullDate;
 	global $ApptView;
 	global $ShowSlotBox;
-	global $DeleteCode;
 
+	if ($_SESSION["TRACE"])
+		error_log("APPT: $UserName, view=$ApptView, action=$FormApptNo, dates=$FormApptSlotDates");
 
 	$ShowSlotBox = true;
 	if ($FormApptNo == "SlotRemoveAll") {
@@ -1778,14 +1875,14 @@ function Configure_Slots() {
 	if ($FormApptNo == "SlotRemoveDeleted") {
 		$query = "DELETE FROM $APPT_TABLE";
 		$query .= " WHERE `appt_location` = +$FormApptSlotLoc";
-		$query .= " AND `appt_type` = 'D'";
+		$query .= " AND `appt_type` LIKE 'D@'";
 		mysqli_query($dbcon, $query);
 		return;
 	}
 
 	if ($FormApptNo == "SlotDeleteCallback") {
 		$query = "UPDATE $APPT_TABLE SET";
-		$query .= " `appt_type` = 'D'";
+		$query .= " `appt_type` LIKE 'D@'";
 		$query .= " WHERE `appt_location` = +$FormApptSlotLoc";
 		$query .= " AND `appt_date` = '$NullDate'";
 		$query .= " AND `appt_name` <> ''";
@@ -1817,9 +1914,9 @@ function Configure_Slots() {
 			$OldDate = $row["appt_date"];
 			$YMD = explode("-", $OldDate);
 			$CloneDate = date("Y-m-d", strtotime($OldDate . "+364 Days"));
-			$ThisDOW = date($DeleteCode, strtotime($CloneDate));
+			$ThisDOW = date("D", strtotime($CloneDate));
 			if (strpos($FormApptSlotDays, $ThisDOW)) {
-				if (($CloneDate >= $StartDate) AND ($CloneDate <= $StopDate)) {
+				if (($CloneDate >= $StartDate) and ($CloneDate <= $StopDate)) {
 					$query = "UPDATE $APPT_TABLE SET";
 					$query .= "  `appt_name` = ''";
 					$query .= ", `appt_date` = '$CloneDate'";
@@ -1841,12 +1938,12 @@ function Configure_Slots() {
 		$query .= " AND `appt_date` < '$StartDate'";
 		mysqli_query($dbcon, $query);
 
-		$appointments = [];
+		unset($appointments);
 		return;
 	}
 
 	while ($ThisDate <= $StopDate) {
-		$ThisDOW = date($DeleteCode, strtotime($ThisDate));
+		$ThisDOW = date("D", strtotime($ThisDate));
 		if (strpos($FormApptSlotDays, $ThisDOW)) {
 			switch ($FormApptNo) {
 				case "SlotAdd1":
@@ -1856,7 +1953,7 @@ function Configure_Slots() {
 					for ($i = 1; $i < count($SlotSets); $i += 3) {
 						$SlotCount = $SlotSets[$i];
 						$SlotTime = $SlotSets[$i+1] . ":00";
-						//if ($_SESSION["TRACE"]) error_log("|" . $SlotSets[$i] . "|" . $SlotSets[$i+1] . "|" . $SlotSets[$i+2] . "|"); // DEBUG
+						//error_log("SS: |" . $SlotSets[$i] . "|" . $SlotSets[$i+1] . "|" . $SlotSets[$i+2] . "|"); // DEBUG
 						$SlotUnreserved = max(0, +$SlotSets[$i] - +$SlotSets[$i+2]);
 						for ($j = 0; $j < $SlotCount; $j++) {
 							$res = ($j >= $SlotUnreserved) ? $RESERVED : "";
@@ -1901,8 +1998,8 @@ function Configure_Slots() {
 	$FormApptSlotSets = "";
 
 	// If only one add/remove on one day, go back to that day
-	if ((($FormApptNo == "SlotAdd1") OR ($FormApptNo == "SlotRemove1"))
-	   AND (count($SlotSets) == 4)) {
+	if ((($FormApptNo == "SlotAdd1") or ($FormApptNo == "SlotRemove1"))
+	   and (count($SlotSets) == 4)) {
 		$ApptView = "ViewDaily";
 		$FormApptNo = "NewDate";
 		$FirstSlotDate = $Date = $FormApptDate = $StartDate;
@@ -1932,8 +2029,20 @@ function InsertNewAppt($iName, $iPhone, $iEmail, $iTags, $iNeed, $iInfo, $iStatu
 	$query .= ", `appt_time` = '$iTime'";
 	$query .= ", `appt_location` = " . +$iLoc;
 	$query .= ", `appt_by` = '$iBy'";
-	//if ($_SESSION["TRACE"]) error_log($query); // DEBUG
+	//error_log("QUERY1: " . $query); // DEBUG
 	mysqli_query($dbcon, $query);
+}
+
+//===========================================================================================
+function Print_Sites() { // for DEBUGGING
+//===========================================================================================
+	global $Site;
+	foreach ($Site as $x => $val0) {
+		echo "<br />--------------------------$x";
+		foreach ($val0 as $Key => $Val) {
+			echo "<br />\t$Key = $Val";
+		}
+	}
 }
 
 ?>
@@ -1946,6 +2055,7 @@ function InsertNewAppt($iName, $iPhone, $iEmail, $iTags, $iNeed, $iInfo, $iStatu
 <meta name="appointments" content="AARP Appointments">
 <link rel="SHORTCUT ICON" href="appt.ico">
 <link rel="stylesheet" href="appt.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
 <style>
 </style>
 
@@ -1974,25 +2084,25 @@ function InsertNewAppt($iName, $iPhone, $iEmail, $iTags, $iNeed, $iInfo, $iStatu
 	var listEBParent = "";
 	var listEBChildren = [];
 	var EBselected = null;
-	var ExportList = "";
 	var ApptBoxOld = "";
 	var ApptBoxNew = "";
 <?php
 	global $RESERVED;
 	global $ApptView;
 	global $UserName;
-	global $UserOptions;
+	global $USE_RES;
 	global $TodayDate;
 	global $ViewDate;
-	echo "\tvar RESERVED = \"$RESERVED\";\n";
-	echo "\tvar ApptView = \"$ApptView\";\n";
-	echo "\tvar UserName = \"$UserName\";\n";
-	echo "\tvar UserFullName = \"$UserFullName\";\n";
-	echo "\tvar UserOptions = \"$UserOptions\";\n";
-	echo "\tvar TodayDate = \"$TodayDate\";\n";
-	echo "\tvar ViewDate = \"$FirstSlotDate\";\n";
-	echo "\tvar SummaryAll = " . (@$_SESSION["SummaryAll"] ? "true" : "false") . "\n";
-	echo "\tvar NullDate = \"$NullDate\"\n";
+	$vars  = "\nvar RESERVED = \"$RESERVED\";\n";
+	$vars .= "\nvar ApptView = \"$ApptView\";\n";
+	$vars .= "\nvar UserName = \"$UserName\";\n";
+	$vars .= "\nvar UserFullName = \"$UserFullName\";\n";
+	$vars .= "\nvar TodayDate = \"$TodayDate\";\n";
+	$vars .= "\nvar ViewDate = \"$FirstSlotDate\";\n";
+	$vars .= "\nvar SummaryAll = " . (@$_SESSION["SummaryAll"] ? "true" : "false") . "\n";
+	$vars .= "\nvar NullDate = \"$NullDate\"\n";
+	$vars .= "\nvar ExportList = \"" . $_SESSION["User"]["user_excel_export"] . "\";\n";
+	echo $vars;
 	global $ApptMove;
 	global $FormApptOldNo;
 	global $FormApptName;
@@ -2002,8 +2112,6 @@ function InsertNewAppt($iName, $iPhone, $iEmail, $iTags, $iNeed, $iInfo, $iStatu
 	global $FormApptNeed;
 	global $FormApptInfo;
 	global $FormApptStatus;
-	global $UserName;
-	global $UserOptions;
 	global $Errormessage;
 	if ($ApptMove) echo "\tMoveData = '$FormApptOldNo|$FormApptName|$FormApptPhone|$FormApptEmail|$FormApptTags|$FormApptNeed|$FormApptInfo|$FormApptStatus';\n";
 	echo "\tvar Errormessage = \"$Errormessage\";\n";
@@ -2036,6 +2144,10 @@ function InsertNewAppt($iName, $iPhone, $iEmail, $iTags, $iNeed, $iInfo, $iStatu
 			MoveName.innerHTML = CopyName.innerHTML = _Show_Chars(OldData[1], "html");
 			MoveBoxMessage.style.display = (MoveMode > 0) ? "block" : "none";
 			CopyBoxMessage.style.display = (MoveMode < 0) ? "block" : "none";
+<?php
+			global $ReserveOldSlot;
+			if ($ReserveOldSlot) echo "MoveAndReserve.checked = true;";
+?>
 			ViewDaily.style.backgroundColor = "hotpink";
 			ViewDeleted.style.backgroundColor = "hotpink";
 			if (ApptView == "ViewCallback") ViewCallback.style.backgroundColor = "lightgreen";
@@ -2046,17 +2158,14 @@ function InsertNewAppt($iName, $iPhone, $iEmail, $iTags, $iNeed, $iInfo, $iStatu
 			if (ApptView == "ViewCallback") ViewCallback.style.backgroundColor = "lightgreen";
 			if (ApptView == "ViewDeleted") ViewDeleted.style.backgroundColor = "lightgreen";
 		}
+		MoveAndReserveOption.style.display = "none";
 		ApptHistoryBox.style.display = (ApptView == "ViewUser") ? "none" : "inline";
-		ApptForm.IDApptLoc.value = ApptLocList;
+		ApptForm.IDApptShow.value = ApptLocList;
 		ApptView = ApptForm.IDApptView.value;
 <?php
 		global $Errormessage;
 		if ($Errormessage != "") echo "alert(\"$Errormessage\");\n";
-		global $FormApptNo;
-		if (substr($FormApptNo, 0, 6) == "FindBy") echo "SearchBox.style.visibility = 'visible';\n";
 ?>
-		FindByVal.value = _Show_Chars(FindByVal.value, "text");
-
 		// Move the current date in the calendar into focus
 		if (ApptView !== "ViewUser") {
 			if ((ViewDate == "") || (ViewDate == NullDate)) ViewDate = TodayDate;
@@ -2065,14 +2174,14 @@ function InsertNewAppt($iName, $iPhone, $iEmail, $iTags, $iNeed, $iInfo, $iStatu
 			if (calptr !== null) calptr.scrollIntoView();
 		}
 
-		// Get cookies
-		cookies = _Read_Cookies();
-
 		// Initialize export lists
 		listEBParent = document.getElementById("EBlist");
 		listEBChildren = EBlist.children;
-		if (cookies["ExportList"]) {
-			eList = cookies["ExportList"].split("|");
+
+		eList = "";
+		if (ExportList != "") eList = ExportList.split("|"); // from the database
+
+		if (eList != "") {
 			for (e = eList.length - 1 ; e >= 0 ; e-- ) { // read the list in backwards
 				ez = (eList[e].substr(0,1) == "*"); // zero indicator
 				et = eList[e].substr(((ez) ? 1 : 0)); // title to match
@@ -2086,8 +2195,12 @@ function InsertNewAppt($iName, $iPhone, $iEmail, $iTags, $iNeed, $iInfo, $iStatu
 				}
 			}
 		}
+		else {
+			EB_Select_All();
+		}
+
 		Make_EB_List();
-		Hide_ExportBox();
+		ExportBox.style.visibility = "hidden";
 
 		// if a move, scroll to highlighted line
 		mvptr = document.getElementsByClassName("apptSlotMoved");
@@ -2096,6 +2209,9 @@ function InsertNewAppt($iName, $iPhone, $iEmail, $iTags, $iNeed, $iInfo, $iStatu
 		// Detect control key held down for checking multiple site boxes
 		window.onkeydown = function(e) { CtrlKey = e.ctrlKey; }
 		window.onkeyup = function(e) { CtrlKey = e.ctrlKey; if (CtrlKeyFlag) ApptOp("Save");}
+
+		// Was there a search and only one result
+		//if (document.getElementById("SearchGo") != null) SearchGo.click();
 	}
  
 	//===========================================================================================
@@ -2125,15 +2241,20 @@ function InsertNewAppt($iName, $iPhone, $iEmail, $iTags, $iNeed, $iInfo, $iStatu
 				ApptForm.IDApptDate.value = NullDate;
 				New_Date(NullDate, 3);
 				break;
-			case "ViewUser":
 			case "ViewDaily":
-				if (MoveMode) return;
+				//if (MoveMode) return;
+				ApptForm.IDApptReason.value = "ViewDaily";
+				ApptForm.IDApptSlot.value = (MoveMode) ? "MoveLoc" : "NewLoc";
+				ApptForm.IDApptDate.value = ViewDate; // earliest date
+				ApptForm.IDApptOldSlot.value = MoveMode;
 				break;
 			case "ViewSummary":
 			case "ViewSummary2":
 				ApptForm.IDApptReason.value = SummaryAll ? "ViewSummaryAll" : "ViewSummary";
 				ApptForm.IDApptSlot.value = (MoveMode) ? "MoveLoc" : "NewLoc";
 				ApptForm.IDApptOldSlot.value = MoveMode;
+				// no break
+			case "ViewUser":
 				break;
 			default:
 				return;
@@ -2153,12 +2274,13 @@ function InsertNewAppt($iName, $iPhone, $iEmail, $iTags, $iNeed, $iInfo, $iStatu
 	//===========================================================================================
 		if (ApptView == "ViewUser") return;
 		if (NV > 10) {
-			for (j = 1; j <= ApptLocList[0]; j++) {
+			ApptLocList.length = 0;
+			for (j = 1; j <= Loc0.value; j++) {
 				jv = document.getElementById("Loc" + j);
 				if (j == Loc) jv.checked = true;
-				ApptLocList[j] = ((jv) && (jv.checked)) ? 1 : 0;
+				if (jv.checked) ApptLocList.push(jv.value);
 			}
-			ApptForm.IDApptLoc.value = ApptLocList;
+			ApptForm.IDApptShow.value = ApptLocList;
 			NV -= 10;
 		}
 		switch (NV) {
@@ -2178,7 +2300,8 @@ function InsertNewAppt($iName, $iPhone, $iEmail, $iTags, $iNeed, $iInfo, $iStatu
 
 		ApptForm.IDApptDate.value = ND;
 		if (MoveMode) {
-			ApptForm.IDApptSlot.value = (MoveMode > 0) ? "Move" : "Copy" ;
+			MoveReason = (MoveAndReserve.checked) ? "MoveAndReserve" : "Move" ;
+			ApptForm.IDApptSlot.value = (MoveMode > 0) ? MoveReason : "Copy" ;
 			ApptForm.IDApptOldSlot.value = MoveMode;
 		}
 		else {
@@ -2209,7 +2332,7 @@ function InsertNewAppt($iName, $iPhone, $iEmail, $iTags, $iNeed, $iInfo, $iStatu
 
 	//===========================================================================================
 	function Change_Appointment(VIS, DBIDX, SLOT, IDX) {
-	// VIS = 0/1 to indicate box visibility
+	// VIS = 0/1 to indicate appointment box visibility
 	// 	-1 to toggle reserved status of the slot
 	// DBIDX = database index for this time slot
 	// SLOT = sequence number for the entire day
@@ -2227,7 +2350,8 @@ function InsertNewAppt($iName, $iPhone, $iEmail, $iTags, $iNeed, $iInfo, $iStatu
 			ApptForm.IDApptDate.value = Current_Date;
 			ApptForm.IDApptSlot.value = DBIDX;
 			ApptForm.IDApptOldSlot.value = MoveMode;
-			ApptForm.IDApptReason.value = (MoveMode > 0) ? "Move" : "Copy" ;
+			MoveReason = (MoveAndReserve.checked) ? "MoveAndReserve" : "Move" ;
+			ApptForm.IDApptReason.value = (MoveMode > 0) ? MoveReason : "Copy" ;
 			ApptOp("Save");
 			VIS = 0;
 			MoveMode = 0;
@@ -2262,24 +2386,17 @@ function InsertNewAppt($iName, $iPhone, $iEmail, $iTags, $iNeed, $iInfo, $iStatu
 				Test_Email(); // Display or hide Send Email button
 			}
 
+			hloc = document.getElementById("LocName" + ApptSiteVal[Current_Record]);
 			switch (ApptView) {
 				case "ViewCallback":
-					htitle = "Entry " + IDX;
-					htitle += " on the Callback List";
-					hloc = document.getElementById("LocName" + ApptSiteVal[Current_Record]);
-					htitle += " for the " + hloc.innerHTML;
+					htitle = "Entry " + IDX + " on the Callback List" + " for the " + hloc.innerHTML;
 					break;
 				case "ViewDeleted":
-					htitle = "Entry " + IDX;
-					htitle += " on the Deleted List";
-					hloc = document.getElementById("LocName" + ApptSiteVal[Current_Record]);
-					htitle += " for the " + hloc.innerHTML;
+					htitle = "Entry " + IDX + " on the Deleted List" + " for the " + hloc.innerHTML;
 					IDApptDelete.style.display = "none";
 					break;
 				default:
-					htitle = "Appointment " + IDX;
-					htitle += " on " + Display_Date + " at " + ApptTimeVal[Current_Record];
-					hloc = document.getElementById("LocName" + ApptSiteVal[Current_Record]);
+					htitle = "Appointment " + IDX + " on " + Display_Date + " at " + ApptTimeVal[Current_Record];
 					htitle += " for the " + hloc.innerHTML;
 			}
 			ApptTitle.innerHTML = htitle;
@@ -2296,6 +2413,7 @@ function InsertNewAppt($iName, $iPhone, $iEmail, $iTags, $iNeed, $iInfo, $iStatu
 			ApptForm.IDApptNeed.value = ApptNeedVal[Current_Record];
 			ApptForm.NeedText.value = _Show_Chars(ApptForm.IDApptNeed.value, "text");
 			ApptForm.IDApptInfo.value = ApptInfoVal[Current_Record];
+			InfoMatch.innerHTML = ApptMatchVal[Current_Record];
 			ApptForm.InfoText.value = _Show_Chars(ApptForm.IDApptInfo.value, "text");
 			ApptForm.IDApptStatus.value = ApptStatusVal[Current_Record];
 			StatusText.value = _Show_Chars(ApptStatusVal[Current_Record], "text");
@@ -2306,6 +2424,8 @@ function InsertNewAppt($iName, $iPhone, $iEmail, $iTags, $iNeed, $iInfo, $iStatu
 			ApptBox.style.visibility = "visible";
 			IDApptSendEmail.style.display = (IDApptEmail.value) ? "inline" : "none";
 			ApptForm.IDApptName.focus();
+			Test_Phone();
+			Test_Email();
 		}
 		else {
 			ApptBox.style.visibility = "none";
@@ -2328,11 +2448,12 @@ function InsertNewAppt($iName, $iPhone, $iEmail, $iTags, $iNeed, $iInfo, $iStatu
 	}
 
 	//===========================================================================================
-	function Test_Phone(phone) {
+	function Test_Phone(phone, notice) {
 	//	phone = true/false
 	//		if false, there is no phone number so enter 0s
 	//===========================================================================================
-		if (! phone) {
+		if (phone == "*") phone = ApptForm.IDApptPhone.value;
+		if (notice == "NONE") {
 			nullPhone = "000-000-0000";
 			if (IDApptPhone.value > nullPhone) {
 				message = "Do you really want to replace " + IDApptPhone.value;
@@ -2341,16 +2462,21 @@ function InsertNewAppt($iName, $iPhone, $iEmail, $iTags, $iNeed, $iInfo, $iStatu
 			}
 			else ApptForm.IDApptPhone.value = nullPhone;
 		}
-		result = _Verify_Phone(ApptForm.IDApptPhone.value, "alert", Appt10digVal[Current_Record]);
+		result = _Verify_Phone(ApptForm.IDApptPhone.value, notice, Appt10digVal[Current_Record]);
 		ApptForm.IDApptPhone.value = result[1];
+		showPink = ((ApptForm.IDApptName.value > "") && (result[0]));
+		ApptForm.IDApptPhone.style.backgroundColor = (showPink) ? "pink" : "white" ;
 		Test_Email(); // Display or hide Send Email button
 	}
 
 	//===========================================================================================
-	function Test_Email() {
+	function Test_Email(email, notice) {
 	//===========================================================================================
-		result = _Verify_Email(ApptForm.IDApptEmail.value, true);
+		if (email == undefined) email = ApptForm.IDApptEmail.value;
+		if (notice == undefined) notice = false;
+		result = _Verify_Email(ApptForm.IDApptEmail.value, notice);
 		ApptForm.IDApptEmail.value = result[1] ;
+		ApptForm.IDApptEmail.style.backgroundColor = (result[0] > 1) ? "pink" : "white" ;
 		ApptBoxNew = Set_ApptBox_Content();
 		IDApptSendEmail.style.display = ((result[0]) || (ApptBoxOld != ApptBoxNew)) ? "none" : "inline" ;
 	}
@@ -2367,7 +2493,8 @@ function InsertNewAppt($iName, $iPhone, $iEmail, $iTags, $iNeed, $iInfo, $iStatu
 			ApptForm.IDApptDate.value = APPTDATE;
 			ApptForm.IDApptSlot.value = APPT;
 			ApptForm.IDApptOldSlot.value = MoveMode;
-			ApptForm.IDApptReason.value = (MoveMode > 0) ? "Move" : "Copy" ;
+			MoveReason = (MoveAndReserve.checked) ? "MoveAndReserve" : "Move" ;
+			ApptForm.IDApptReason.value = (MoveMode > 0) ? MoveReason : "Copy" ;
 			ApptView = ApptForm.IDApptView.value = "ViewDaily"; // change to daily view to see effect of add
 			ApptOp("Save");
 			VIS = 0;
@@ -2414,17 +2541,21 @@ function InsertNewAppt($iName, $iPhone, $iEmail, $iTags, $iNeed, $iInfo, $iStatu
 			ApptForm.IDApptSlot.value = "NewLoc";
 		}
 
-		ApptForm.IDApptCustSite.value = Loc;
-		for (j = 1; j <= ApptLocList[0]; j++) {
+		//if (Loc !== undefined) ApptForm.IDApptCustSite.value = Loc;
+		ApptLocList.length = 0;
+		for (j = 1; j <= Loc0.value; j++) {
 			jv = document.getElementById("Loc" + j);
-			ApptLocList[j] = ((jv) && (jv.checked)) ? 1 : 0;
+			switch (LocID) {
+			case "ALL": ApptLocList.push(jv.value); jv.checked = true; break;
+			case "NONE": jv.checked = false; break;
+			default: if (jv.checked) ApptLocList.push(jv.value);
+			}
 		}
-		ApptForm.IDApptLoc.value = ApptLocList;
+		ApptForm.IDApptShow.value = ApptLocList;
 
 		//Check control key before saving
-		
 		CtrlKeyFlag = CtrlKey;
-		if (! CtrlKey) ApptOp("Save");
+		if ((! CtrlKey) && (LocID !== "NONE")) ApptOp("Save");
 	}
 
 	//===========================================================================================
@@ -2434,12 +2565,16 @@ function InsertNewAppt($iName, $iPhone, $iEmail, $iTags, $iNeed, $iInfo, $iStatu
 		var jmax = +SlotsToAdd.value;
 		if (jmax == 0) return;
 		if (jmax > 50) {
-			alert("You can only add 50 at a time. \n\nClick again if you want to add 50.");
+			OKtoDo = confirm("You can only add 50 at a time. \n\nClick OK if you want to add 50.");
 			SlotsToAdd.value = 50;
-			return;
+			if (! OKtoDo) return;
 		}
 		ApptForm.IDApptSlot.value = "AddCBSlots";
-		ApptForm.IDApptSlotLoc.value = LocationToAdd.value;
+		var selOption = LocationToAdd.options.selectedIndex;
+		var locId = LocationToAdd[selOption].value;
+		var locSiteElement = window.document.getElementById("Loc" + selOption);
+		if (! locSiteElement.checked) return;
+		ApptForm.IDApptSlotLoc.value = locId;
 		ApptForm.IDApptSlotSets.value = jmax;
 		WaitBox.style.display = "block";
 		document.getElementById("ApptForm").submit();
@@ -2461,6 +2596,7 @@ function InsertNewAppt($iName, $iPhone, $iEmail, $iTags, $iNeed, $iInfo, $iStatu
 	//===========================================================================================
 		if (FindByVal.value == "") {
 			alert("Sorry, I can't search for nothing.");
+			FindByVal.focus();
 			return;
 			}
 		if (FindByPhone.checked) {
@@ -2528,17 +2664,18 @@ function InsertNewAppt($iName, $iPhone, $iEmail, $iTags, $iNeed, $iInfo, $iStatu
 				MoveBoxMessage.style.display = "none";
 				CopyBoxMessage.style.display = "block";
 				ApptBox.style.visibility = "hidden";
-				ViewDaily.style.backgroundColor = "hotpink";
+				//ViewDaily.style.backgroundColor = "hotpink";
 				ViewDeleted.style.backgroundColor = "hotpink";
 				return;
 			case "Move1": // The first step in moving an appointment
 				ApptForm.IDApptName.value = _Clean_Chars(ApptForm.IDApptName.value, "text");
 				MoveMode = ApptForm.IDApptSlot.value;
 				MoveBox.style.visibility = "visible";
+				MoveAndReserveOption.style.display = ((ApptView == "ViewCallback") || (ApptView == "ViewDeleted")) ? "none" : "inline"; // Don't allow reserve for CB and Del views
 				MoveBoxMessage.style.display = "block";
 				CopyBoxMessage.style.display = "none";
 				ApptBox.style.visibility = "hidden";
-				ViewDaily.style.backgroundColor = "hotpink";
+				//ViewDaily.style.backgroundColor = "hotpink";
 				ViewDeleted.style.backgroundColor = "hotpink";
 				return;
 			case "Cancel":
@@ -2674,22 +2811,41 @@ function InsertNewAppt($iName, $iPhone, $iEmail, $iTags, $iNeed, $iInfo, $iStatu
 	}
 
 	//===========================================================================================
+	function Show_Stats(ShowAll) {
+	//===========================================================================================
+		if (MoveMode) return;
+<?php
+		global $isAdministrator, $isManager;
+		//if ((! $isAdministrator) and (! $isManager)) echo "return; // Not Admnistrator or Manager\n";
+?>
+		hideClass = document.getElementsByClassName('LocStatHide');
+		//if (hideClass.length == 0) return;
+		for (j = 0; j < hideClass.length; j++) {
+<?php
+		global $isAdministrator;
+		if (! $isAdministrator) echo "if ((hideClass[j].innerHTML.search(\"^\")) > -1) continue;\n";
+?>
+			hideClass[j].style.display = (ShowAll) ? 'table-row' : 'none' ;
+		}
+		StatsBox.style.display = "block";
+	}
+
+	//===========================================================================================
 	function Print_Appointments() {
 	//===========================================================================================
 		if (MoveMode) return;
 		count = 0;
-		for (j = 1; j <= ApptLocList[0]; j++) {
-			locid = document.getElementById("Loc" + j);
-			if ((ApptLocList[j]) && (! locid.disabled)) {
+		for (j = 1; j <= Loc0.value; j++) {
+			locElement = document.getElementById("Loc" + j);
+			if (locElement.checked) {
 				count++;
-				locname = document.getElementById("LocName" + j).innerHTML;
+				locname = document.getElementById("LocName" + locElement.value).innerHTML;
 			}
-
 		}
 		if (count == 0) return;
 		if (count > 1) {alert("Please print only one site at a time."); return;}
 
-		ApptPrint = window.open("", "", "menubar=1, scrollbars=1, resizable=1");
+		ApptPrint = window.open("", "", "width=700,height=700");
 		ApptPrint.document.writeln("<!DOCTYPE html>");
 		ApptPrint.document.writeln("<head>");
 		ApptPrint.document.writeln("<style>");
@@ -2778,8 +2934,6 @@ function InsertNewAppt($iName, $iPhone, $iEmail, $iTags, $iNeed, $iInfo, $iStatu
 			ApptPrint.document.writeln(FootText);
 			ApptPrint.document.writeln("	</ol>");
 			}
-		ApptPrint.document.writeln("</body>");
-		ApptPrint.print();
 	}
 
 	//===========================================================================================
@@ -2787,9 +2941,9 @@ function InsertNewAppt($iName, $iPhone, $iEmail, $iTags, $iNeed, $iInfo, $iStatu
 	//===========================================================================================
 		if (MoveMode) return;
 		count = 0;
-		for (j = 1; j <= ApptLocList[0]; j++) {
-			locid = document.getElementById("Loc" + j);
-			count += ((ApptLocList[j]) && (! locid.disabled)) ? 1 : 0;
+		for (j = 1; j <= Loc0.value; j++) {
+			locElement = document.getElementById("Loc" + j);
+			if (locElement.checked) count++;
 		}
 		if (count == 0) return;
 		if (count > 1) {
@@ -2798,7 +2952,7 @@ function InsertNewAppt($iName, $iPhone, $iEmail, $iTags, $iNeed, $iInfo, $iStatu
 		}
 
 		// Create ERO document and write header
-		EROPrint = window.open("", "", "menubar=1, scrollbars=1, resizable=1");
+		EROPrint = window.open("", "", "width=830, height=600");
 		EROPrint.document.writeln("<!DOCTYPE html>");
 		EROPrint.document.writeln("<head>");
 		EROPrint.document.writeln("<style>");
@@ -3008,6 +3162,7 @@ function InsertNewAppt($iName, $iPhone, $iEmail, $iTags, $iNeed, $iInfo, $iStatu
 	//===========================================================================================
 		if (MoveMode) return;
 		ExportBox.style.visibility = "visible";
+		EBOneDay.checked = false;
 		Make_EB_List();
 	}
 
@@ -3039,6 +3194,7 @@ function InsertNewAppt($iName, $iPhone, $iEmail, $iTags, $iNeed, $iInfo, $iStatu
 				nullBox.disabled = true;
 				nullBox.checked = false;
 			}
+			
 		}
 	}
 
@@ -3099,15 +3255,18 @@ function InsertNewAppt($iName, $iPhone, $iEmail, $iTags, $iNeed, $iInfo, $iStatu
 	//===========================================================================================
 		if (MoveMode) return;
 		count = 0;
-		for (j = 1; j <= ApptLocList[0]; j++) {
-			count += (ApptLocList[j] == 1) ? 1 : 0;
+		for (j = 1; j <= Loc0.value; j++) {
+			LocElement = document.getElementById("Loc" + j);
+			if (LocElement.checked) count++;
 		}
 		if (count == 0) { alert("No sites have been selected."); return; }
+
+		// Tack on the date if report is only for the one date
+		if (EBOneDay.checked) ExportList += ("|ONEDATE:" + Current_Date);
 
 		ApptForm.IDApptSlot.value = "PrintExcel";
 		ApptForm.IDApptReason.value = ExportList; // from Make_EB_List()
 		if (ExportList == "") { alert("No export fields have been selected."); return; }
-		_Set_Cookie("ExportList", ExportList);
 		ApptOp("PrintExcel");
 	}
 
@@ -3170,8 +3329,8 @@ function InsertNewAppt($iName, $iPhone, $iEmail, $iTags, $iNeed, $iInfo, $iStatu
 		// set the location
 		SlotLocation.value = LocationToAdd.value;
 		// make sure the check box is checked so you can see the addition
-		ApptLocList[SlotLocation.selectedIndex] = 1;
-		ApptForm.IDApptLoc.value = ApptLocList;
+		ApptLocList.push(SlotLocation.value);
+		ApptForm.IDApptShow.value = ApptLocList;
 
 		// set the date
 		SlotStart.value =
@@ -3313,12 +3472,14 @@ function InsertNewAppt($iName, $iPhone, $iEmail, $iTags, $iNeed, $iInfo, $iStatu
 				WarnMessage = "This will copy the appointment structure from the previous year with dates adjusted to retain the day-of-the-week pattern. It will remove all data and structure from the previous year. Check especially the first and last days since they may not be properly created.";
 				break;
 			case "SlotRemoveAll":
-				WarnMessage = "This will remove all appointment data for a clean start, including \"deleted\" entries";
+				WarnMessage = "This will remove all appointment data for a clean start, including \"deleted\" entries.";
+				WarnMessage += "\n\nPLEASE CONSIDER DOING AN EXCEL EXPORT BEFORE DOING THIS!."
 				break;
 			case "SlotRemoveDateRange":
 				showSet = showD;
-				SetAllDOW = true;
+				//SetAllDOW = true;
 				WarnMessage = "This will remove all appointment data from " + SlotStart.value + " through " + SlotStop.value; 
+				WarnMessage += "\n\nPLEASE CONSIDER DOING AN EXCEL EXPORT BEFORE DOING THIS!."
 				break;
 		}
 		SBPatternOption.style.display = showSet[0];
@@ -3570,51 +3731,47 @@ function InsertNewAppt($iName, $iPhone, $iEmail, $iTags, $iNeed, $iInfo, $iStatu
 	function Show_SearchBox(ID) {
 	//===========================================================================================
 		if (MoveMode) return;
+		AddHeader.style.display = "none";
+		SearchHeader.style.display = "block";
+		SearchButton.style.display = "inline";
 		switch (ID) {
-			case "FindByTagsButton":
+			case "FindByTags":
 			case "SearchApptTags":
 				FindByTags.checked = true;
 				break;
-			case "FindByNameButton":
+			case "FindByName":
 			case "SearchApptName":
 				FindByName.checked = true;
 				break;
-			case "FindByEmailButton":
+			case "FindByEmail":
 			case "SearchApptEmail":
 				FindByEmail.checked = true;
 				break;
-			case "FindByPhoneButton":
 			case "SearchAppt":
+			case "FindByPhone":
 			case "SearchApptPhone":
 				// no break
 			default:
 				FindByPhone.checked = true;
 		}
-		FindByTagsButton.style.backgroundColor = FindByTags.checked ? "lightgreen" : "transparent";
-		FindByNameButton.style.backgroundColor = FindByName.checked ? "lightgreen" : "transparent";
-		FindByEmailButton.style.backgroundColor = FindByEmail.checked ? "lightgreen" : "transparent";
-		FindByPhoneButton.style.backgroundColor = FindByPhone.checked ? "lightgreen" : "transparent";
+
+		// Clear out the last search
+		while (SearchTableDiv.hasChildNodes()) {
+			SearchTableDiv.removeChild(SearchTableDiv.firstChild);
+		}
+
+		FindByVal.placeholder = (FindByPhone.checked) ? "333-555-1234" : "";
 		SearchBox.style.visibility = "visible";
 		FindByVal.focus();
 	}
 
 	//===========================================================================================
-	function Hide_SearchBox() {
+	function Show_Deleted() {
 	//===========================================================================================
-		SearchBox.style.visibility = "hidden";
-	}
-
-
-	//===========================================================================================
-	function Hide_SlotBox() {
-	//===========================================================================================
-		SlotBox.style.visibility = "hidden";
-	}
-
-	//===========================================================================================
-	function Hide_ExportBox() {
-	//===========================================================================================
-		ExportBox.style.visibility = "hidden";
+		deletedList = document.getElementsByClassName("deletedrecord");
+		for (j = 0 ; j < deletedList.length ; j++) {
+			deletedList[j].style.display = (ShowDeleted.checked) ? "table-row" : "none" ;
+		}
 	}
 
 	//===========================================================================================
@@ -3640,20 +3797,20 @@ function InsertNewAppt($iName, $iPhone, $iEmail, $iTags, $iNeed, $iInfo, $iStatu
 		echo "You are signed in as " . _Show_Chars($UserFullName, "html") . "\n";
 		Create_Menu();
 		?>
-	</div>
-
+	</div> <!-- appt_page_header -->
 
 	<div id="sidebarDiv">
 		<?php
 		Calc_Slots();
-		global $OtherAppts;
 		?>
-	</div>
+	</div> <!-- sidebarDiv -->
 
 	<div class="slots">
 		<?php
 		Show_Slots();
 		?>
+	</div> <!-- slots -->
+</div> <!-- main -->
 
 <!--
 <?php
@@ -3671,6 +3828,8 @@ function InsertNewAppt($iName, $iPhone, $iEmail, $iTags, $iNeed, $iInfo, $iStatu
 
 <script>
 <?php
+	global $Site;
+	global $FormApptShow;
 	global $ApptNo;
 	global $ApptTimeDisplay;
 	global $ApptName;
@@ -3681,16 +3840,16 @@ function InsertNewAppt($iName, $iPhone, $iEmail, $iTags, $iNeed, $iInfo, $iStatu
 	global $ApptTags;
 	global $ApptNeed;
 	global $ApptInfo;
+	global $ApptMatch;
 	global $ApptView;
 	global $ApptStatus;
-	global $UserOptions;
 	global $LastSlotNumber;
 	global $HeaderText;
 	global $FirstSlotDate;
 	global $DeletedClassFlag, $CallbackClassFlag;
 	global $UserHome;
 	global $DisplayDate;
-	$DisplayDate = Format_Date($FirstSlotDate, true); // set $MON which is global
+	$DisplayDate = Format_Date($FirstSlotDate, "Show weekday"); // set $MON which is global
 	echo "Display_Date = '$DisplayDate';\n";
 	echo "Current_Date = '$FirstSlotDate';\n";
 	echo "ApptCount = $LastSlotNumber;\n";
@@ -3698,16 +3857,17 @@ function InsertNewAppt($iName, $iPhone, $iEmail, $iTags, $iNeed, $iInfo, $iStatu
 	echo "ApptTimeVal = [$ApptTimeDisplay];\n";
 	echo "ApptNameVal = [$ApptName];\n";
 	echo "ApptPhoneVal = [$ApptPhone];\n";
-	echo "ApptEmailVal = [" . htmlspecialchars_decode($ApptEmail ?? '') . "];\n";
+	$ApptEmail = htmlspecialchars_decode($ApptEmail ?? '');
+	echo "ApptEmailVal = [$ApptEmail];\n";
 	echo "ApptSiteVal = [$ApptSite];\n";
 	echo "Appt10digVal = [$Appt10dig];\n";
-	echo "ApptLocList = [$FormApptLoc];\n";
+	echo "ApptLocList = [$FormApptShow];\n";
 	echo "ApptTagsVal = [$ApptTags];\n";
 	echo "ApptNeedVal = [$ApptNeed];\n";
 	echo "ApptInfoVal = [$ApptInfo];\n";
+	echo "ApptMatchVal = [$ApptMatch];\n";
 	$ApptStatus = htmlspecialchars_decode($ApptStatus ?? '');
 	echo "ApptStatusVal = [$ApptStatus];\n";
-	//if (($UserHome == 0) AND ($_SESSION["UserLoc"] > 0)) echo "Loc" . $ul . ".checked = true;\n";
 	if ($ApptView != "ViewUser") {
 		if ($CallbackClassFlag) {
 			echo "ViewCallback.style.color = 'blue';\n";
@@ -3722,13 +3882,16 @@ function InsertNewAppt($iName, $iPhone, $iEmail, $iTags, $iNeed, $iInfo, $iStatu
 </script>
 
 <div id="ApptBox" style="visibility:<?php global $ApptBox; echo $ApptBox; ?>;">
+
 	<span id="Display_Date" style="display: none;">
 <?php
 	global $DisplayDate;
 	echo $DisplayDate;
 ?>
-	</span>
+	</span> <!-- Display_Date -->
+
 	<div id="ApptTitle">WINDOW TITLE</div>
+
 	<table width="100%"><tr><td>
 	<div id="ApptDataDiv">
 	<div id="ApptFormBox">
@@ -3736,30 +3899,30 @@ function InsertNewAppt($iName, $iPhone, $iEmail, $iTags, $iNeed, $iInfo, $iStatu
 		<table id="ApptDataTable">
 			<tr>	<td>Name: </td>
 				<td><input id="IDApptName" name="IDApptName" class="formtext" type="text"
-					title="Enter the taxpayer's name, and spouse if married" 
-					onchange="Test_Email();"/></td></tr>
+					title="Enter the taxpayer's name, and spouse if married" /></td></tr> 
 			<tr>	<td>Phone: </td>
 				<td><input id="IDApptPhone" name="IDApptPhone" type="text"
 					<?php
-					global $Location10dig, $LocationLookup, $UserHome;
+					global $Site;
+					global $UserHome;
 					global $ApptView, $UserPhone;
 					if ($ApptView=='ViewUser') echo ('value="' . $UserPhone . '" disabled="disabled"');
 					$title = "Enter taxpayer's phone number";
-					if (($UserHome == 0) OR ($Location10dig[$LocationLookup['S' . $UserHome]])) $title .= ", including area code";
+					if (($UserHome == 0) or ($Site['S' . $UserHome]["10dig"])) $title .= ", including area code";
 					echo " title=\"$title\"";
 					?>
-					onchange="Test_Phone(true)" />
-					<span id="NoPhone" onclick="Test_Phone(false);">NONE</span></td></tr>
+					onchange="Test_Phone(this.value,'alert')" />
+					<span id="NoPhone" onclick="Test_Phone('*','NONE');">NONE</span></td></tr>
 
 			<tr>	<td>Email: </td>
 				<td><input id="IDApptEmail" name="IDApptEmail" class="formtext" type="text"
-					title="Enter the taxpayer's email" onchange="Test_Email()" 
+					title="Enter the taxpayer's email" onchange="Test_Email(this.value, 'alert')" 
 					<?php global $ApptView, $UserEmail;
 					if ($ApptView=='ViewUser') echo ('value="' . htmlspecialchars_decode($UserEmail ?? '') . '" disabled="disabled"'); ?>
 					/></td></tr>
 			<tr <?php global $ApptView; if ($ApptView == "ViewUser") echo "style='display: none;'" ?>>
 				<td>Tags: </td>
-				<td style="text-align: left; font-weight: normal; font-size: 80%;">(Will print after the name in the daily view)</td></tr>
+				<td style="text-align: left; font-weight: normal; font-size: 80%;">(Displays after name in the daily view)</td></tr>
 			<tr <?php global $ApptView; if ($ApptView == "ViewUser") echo "style='display: none;'" ?>>
 				<td></td>
 				<td>	<textarea id="TagsText" class="formtext" type="text" onchange="Change_Text(this.id)"></textarea>
@@ -3769,7 +3932,7 @@ function InsertNewAppt($iName, $iPhone, $iEmail, $iTags, $iNeed, $iInfo, $iStatu
 			<?php	global $ApptView;
 				if ($ApptView != "ViewUser") {
 					echo "<td style='text-align: left; font-weight: normal; font-size: 80%;'>\n";
-					echo "(Will print as a footnote on check-in list)</td></tr>\n";
+					echo "(Prints as a footnote on check-in list)</td></tr>\n";
 					echo "<tr><td></td>\n";
 				}
 				?>
@@ -3778,6 +3941,7 @@ function InsertNewAppt($iName, $iPhone, $iEmail, $iTags, $iNeed, $iInfo, $iStatu
 			<tr <?php global $ApptView; if ($ApptView == "ViewUser") echo "style='display: none;'" ?>>
 				<td>Info: </td>
 				<td style="text-align: left; font-weight: normal; font-size: 80%;">(Information just for schedulers)</td></tr>
+
 			<tr <?php global $ApptView; if ($ApptView == "ViewUser") echo "style='display: none;'" ?>>
 				<td></td>
 				<td>	<textarea id="InfoText" class="formtext" type="text" onchange="Change_Text(this.id)"></textarea>
@@ -3792,7 +3956,7 @@ function InsertNewAppt($iName, $iPhone, $iEmail, $iTags, $iNeed, $iInfo, $iStatu
 					<input class='hidden' id="IDApptSlot" name="IDApptSlot" type="text" />
 					<input class='hidden' id="IDApptOldSlot" name="IDApptOldSlot" type="text" />
 					<input class='hidden' id="IDApptStatus" name="IDApptStatus" type="text" />
-					<input class='hidden' id="IDApptLoc" name="IDApptLoc" type="text" />
+					<input class='hidden' id="IDApptShow" name="IDApptShow" type="text" />
 					<input class='hidden' id="IDApptSlotDates" name="IDApptSlotDates" type="text" />
 					<input class='hidden' id="IDApptSlotDays" name="IDApptSlotDays" type="text" />
 					<input class='hidden' id="IDApptSlotLoc" name="IDApptSlotLoc" type="text" />
@@ -3803,7 +3967,7 @@ function InsertNewAppt($iName, $iPhone, $iEmail, $iTags, $iNeed, $iInfo, $iStatu
 				</td></tr>
 		</table>
 		</form>
-	</div>
+	</div> <!-- apptFormBox -->
 
 	<div id="ApptHistoryBox">
 		<b>Contact history:</b>
@@ -3821,30 +3985,68 @@ function InsertNewAppt($iName, $iPhone, $iEmail, $iTags, $iNeed, $iInfo, $iStatu
 			onchange="Add_Comment(this.id);"
 			onkeyup="Test_For_Enter(this.id, event)" />
 		<br /><textarea id="StatusText" readonly="readonly"></textarea>
-	</div>
+	</div> <!-- ApptHistoryBox -->
 	</div> <!-- ApptDataDiv -->
 
 	</td></tr><tr><td>
+	<div style="width: 100%"><span id="InfoMatch"</span></div>
 
 	<div id="ApptButtonBox">
 
 		<?php
 		Appt_Box_Buttons();
 		?>
-	</div>
+	</div> <!-- ApptButtonBox -->
+
 	</td></tr></table>
-</div>
+</div> <!-- ApptBox -->
+
+<div id="StatsBox">
+	<div id="StatsDiv">
+	<div id="StatsHeader">
+		<div id="StatsTitle">Site Statistics</div>
+		<div id="StatsBoxClose" onclick="StatsBox.style.display='none'">&times;</div>
+		<div id="LSTCheckbox" <?php global $isAdministrator, $isManager; if (!$isAdministrator and !$isManager) echo "style='visibility:hidden;'";?> >
+			<input type='checkbox' onchange='Show_Stats(this.checked);' /> Check to see all sites</div>
+
+	</div> <!-- StatsHeader -->
+
+	<div id="StatsTableDiv">
+<?php
+		global $Site;
+		$LocStatTableHtml = "<table id='LocStatTable'>";
+		$LocStatTableHtml .= "<tr class='sticky' style='background-color: lightgreen;'>";
+		$LocStatTableHtml .= "<th>Site Name</th><th>Appts&nbsp;Made</th><th>By&nbsp;Inet</th><th>Appts&nbsp;Open</th><th>Appts&nbsp;Res</th><th>On&nbsp;CB</th></tr>";
+		foreach ($Site as $SiteKey => $ThisSite) {
+			$rowClass = ($ThisSite["Permissions"]) ? "LocStatSee" : "LocStatHide" ;
+			$LocStatName = _Show_Chars($ThisSite["Name"], "html");
+			$LocStatTableHtml .= "<tr class='$rowClass'><td>$LocStatName</td>";
+			$LocStatTableHtml .= "<td>" . $ThisSite["BusyCount"] . "</td>";
+			$LocStatTableHtml .= "<td>" . $ThisSite["InetCount"] . "</td>";
+			$LocStatTableHtml .= "<td>" . ($ThisSite["AvailCount"] - $ThisSite["ResCount"]) . "</td>";
+			$LocStatTableHtml .= "<td>" . $ThisSite["ResCount"] . "</td>";
+			$LocStatTableHtml .= "<td>" . $ThisSite["BusyCBCount"] . "</td></tr>";
+		}
+		$LocStatTableHtml .= "</table>";
+		echo $LocStatTableHtml;
+?>
+	</div> <!-- StatsTableDiv -->
+	<hr />
+	<button id="StatCancelButton" onclick="StatsBox.style.display = 'none';"
+		title="Close this window">Close</button>
+	</div> <!-- StatsDiv -->
+</div> <!-- StatsBox -->
 
 <div id="SlotBox" style="visibility: <?php global $ShowSlotBox; echo (($ShowSlotBox) ? "visible" : "hidden"); ?>">
 	<center>
 	<div id="SBTitle">
 		Appointment Slot Configurator
-		<div id="SlotBoxClose" onclick="Hide_SlotBox()">&times;</div>
-	</div>
+		<div id="SlotBoxClose" onclick="SlotBox.style.visibility = 'hidden';">&times;</div>
+	</div> <!-- SBTitle -->
 	
 	<table>	<tr><td style="text-align: right">Task:</td>
 		<td><select id="SlotAction" value=""  
-			onchange="Manage_Appointments(false, false);"
+			onchange="Manage_Appointments(false, false, false);"
 			style="width:100%">
 			<option value="SlotAdd"
 				title="Add new slots to what is already there">
@@ -3879,7 +4081,7 @@ function InsertNewAppt($iName, $iPhone, $iEmail, $iTags, $iNeed, $iInfo, $iStatu
 			style="width: 100%;">
 			<!-- <option value="0" prompt="For what site?"></option> -->
 			<?php
-			List_Locations($_SESSION["UserHome"]);
+			List_Locations($ADD_APP);
 			?>
 		</select></td></tr>
 
@@ -3896,14 +4098,14 @@ function InsertNewAppt($iName, $iPhone, $iEmail, $iTags, $iNeed, $iInfo, $iStatu
 			</span></td></tr>
 	</table>
 
-	<span id="SBDates" onchange="Manage_Appointments(false, false);">
+	<span id="SBDates" onchange="Manage_Appointments(false, false, false);">
 		<hr />
 		<?php global $TodayDate;
 		echo "From&nbsp;<input id='SlotStart' type='date' value='$TodayDate' onchange='Slot_Date_Change();'/>&nbsp;through&nbsp;<input id='SlotStop' type='date' value='$TodayDate' />\n";
 		?>
 	</span>
 
-	<span id="SBDays" onchange="Manage_Appointments(false, false);">
+	<span id="SBDays" onchange="Manage_Appointments(false, false, false);">
 		on every:
 		<table id="SlotBoxTable"><tr>
 			<td>Sun
@@ -3924,7 +4126,7 @@ function InsertNewAppt($iName, $iPhone, $iEmail, $iTags, $iNeed, $iInfo, $iStatu
 		</table>
 	</span>
 
-	<span id="SBSlots" onchange="Manage_Appointments(false, false);">
+	<span id="SBSlots" onchange="Manage_Appointments(false, false, false);">
 		<br />Number of slots: <input id="SlotCount1" class="slotnum" type="number" />
 			at <input id="SlotTime1" class="slottime" type="time" />
 			with <input id="SlotRes1" class="slotnum" type="number" /> reserved.
@@ -3956,34 +4158,34 @@ function InsertNewAppt($iName, $iPhone, $iEmail, $iTags, $iNeed, $iInfo, $iStatu
 		<button id="SBPatternSave" onclick="Save_Pattern(this.id);">Save</button>
 		<button id="SBPatternSaveAs" onclick="Save_Pattern(this.id);">Save as</button>
 		<span id="SBPatternResponse"></span>
-	</div>
+	</div> <!-- SBPatternSaveButtons -->
 	<div>
-		<button id="SBGoButton" onclick="Manage_Appointments(true, false);"
+		<button id="SBGoButton" onclick="Manage_Appointments(true, false, false);"
 			title="Perform the action (if the button is green)">Go</button>
-		<button id="SBCancelButton" onclick="Hide_SlotBox();"
+		<button id="SBCancelButton" onclick="SlotBox.style.visibility = 'hidden';"
 			title="Close this window">Cancel</button>
 		<button id="SBResetButton" onclick="Fill_Pattern();"
 			title="Restore the appointment pattern back to the one chosen above">Reset</button>
 	<span id="SBWaitMessage" class="blink">WORKING!</span>
 	</div>
 	</center>
-</div>
+</div> <!-- SlotBox -->
 
 <div id="ExportBox">
 	<div id="EBTitle">
 		Export Site Data
-		<div id="ExportBoxClose" onclick="Hide_ExportBox()">&times;</div>
-	</div>
+		<div id="ExportBoxClose" onclick="ExportBox.style.visibility = 'hidden';">&times;</div>
+	</div> <!-- DBTitle -->
 
 	<div id="EBheader" style="display: fixed;">
 		&#x2611; SELECT TO EXPORT <button onclick="EB_Select_All();">Select All</button>
 		<br /><span style="padding-left: 5em;">SKIP RECORD IF NULL &#x2611;</span>
-	</div>
+	</div> <!-- EBheader -->
 
 	<hr />
 
 	<div id="EBlist" onchange="Make_EB_List();">
-		<div class="EBmoveable"
+		<div id="LOCATION" class="EBmoveable"
 			draggable="true"
 			ondragend="EB_dragEnd();"
 			ondragover="EB_dragOver(event);"
@@ -3991,7 +4193,7 @@ function InsertNewAppt($iName, $iPhone, $iEmail, $iTags, $iNeed, $iInfo, $iStatu
 			<span class="EBselect"><input type="checkbox" /> LOCATION</span>
 			<span class="EBomit hidden"><input type="checkbox"></span>
 		</div>
-		<div class="EBmoveable"
+		<div id="DATE" class="EBmoveable"
 			draggable="true"
 			ondragend="EB_dragEnd();"
 			ondragover="EB_dragOver(event);"
@@ -3999,7 +4201,7 @@ function InsertNewAppt($iName, $iPhone, $iEmail, $iTags, $iNeed, $iInfo, $iStatu
 			<span class="EBselect"><input type="checkbox"> DATE</span>
 			<span class="EBomit"><input type="checkbox" title="Skip if on Callback or Deleted Lists"></span>
 		</div>
-		<div class="EBmoveable"
+		<div id="TIME" class="EBmoveable"
 			draggable="true"
 			ondragend="EB_dragEnd();"
 			ondragover="EB_dragOver(event);"
@@ -4007,7 +4209,7 @@ function InsertNewAppt($iName, $iPhone, $iEmail, $iTags, $iNeed, $iInfo, $iStatu
 			<span class="EBselect"><input type="checkbox"> TIME</span>
 			<span class="EBomit"><input type="checkbox" title="Skip if on Callback or Deleted Lists"></span>
 		</div>
-		<div class="EBmoveable"
+		<div id="NAME" class="EBmoveable"
 			draggable="true"
 			ondragend="EB_dragEnd();"
 			ondragover="EB_dragOver(event);"
@@ -4015,7 +4217,7 @@ function InsertNewAppt($iName, $iPhone, $iEmail, $iTags, $iNeed, $iInfo, $iStatu
 			<span class="EBselect"><input type="checkbox"> NAME</span>
 			<span class="EBomit hidden"><input type="checkbox"></span>
 		</div>
-		<div class="EBmoveable"
+		<div id="PHONE" class="EBmoveable"
 			draggable="true"
 			ondragend="EB_dragEnd();"
 			ondragover="EB_dragOver(event);"
@@ -4023,7 +4225,7 @@ function InsertNewAppt($iName, $iPhone, $iEmail, $iTags, $iNeed, $iInfo, $iStatu
 			<span class="EBselect"><input type="checkbox"> PHONE</span>
 			<span class="EBomit"><input type="checkbox" title="Skip if phone is 000-000-0000";></span>
 		</div>
-		<div class="EBmoveable"
+		<div id="EMAIL" class="EBmoveable"
 			draggable="true"
 			ondragend="EB_dragEnd();"
 			ondragover="EB_dragOver(event);"
@@ -4031,7 +4233,7 @@ function InsertNewAppt($iName, $iPhone, $iEmail, $iTags, $iNeed, $iInfo, $iStatu
 			<span class="EBselect"><input type="checkbox"> EMAIL</span>
 			<span class="EBomit"><input type="checkbox" title="Skip if no email"></span>
 		</div>
-		<div class="EBmoveable"
+		<div id="LASTREMINDER" class="EBmoveable"
 			draggable="true"
 			ondragend="EB_dragEnd();"
 			ondragover="EB_dragOver(event);"
@@ -4039,7 +4241,7 @@ function InsertNewAppt($iName, $iPhone, $iEmail, $iTags, $iNeed, $iInfo, $iStatu
 			<span class="EBselect"><input type="checkbox"> LAST REMINDER</span>
 			<span class="EBomit"><input type="checkbox" title="Skip if there WAS a reminder"></span>
 		</div>
-		<div class="EBmoveable"
+		<div id="TAGS" class="EBmoveable"
 			draggable="true"
 			ondragend="EB_dragEnd();"
 			ondragover="EB_dragOver(event);"
@@ -4047,7 +4249,7 @@ function InsertNewAppt($iName, $iPhone, $iEmail, $iTags, $iNeed, $iInfo, $iStatu
 			<span class="EBselect"><input type="checkbox"> TAGS</span>
 			<span class="EBomit"><input type="checkbox" title="Skip if there are no tags"></span>
 		</div>
-		<div class="EBmoveable"
+		<div id="FOOTNOTES" class="EBmoveable"
 			draggable="true"
 			ondragend="EB_dragEnd();"
 			ondragover="EB_dragOver(event);"
@@ -4055,7 +4257,7 @@ function InsertNewAppt($iName, $iPhone, $iEmail, $iTags, $iNeed, $iInfo, $iStatu
 			<span class="EBselect"><input type="checkbox"> FOOTNOTES</span>
 			<span class="EBomit"><input type="checkbox" title="Skip if there are no footnotes"></span>
 		</div>
-		<div class="EBmoveable"
+		<div id="INFO" class="EBmoveable"
 			draggable="true"
 			ondragend="EB_dragEnd();"
 			ondragover="EB_dragOver(event);"
@@ -4063,7 +4265,15 @@ function InsertNewAppt($iName, $iPhone, $iEmail, $iTags, $iNeed, $iInfo, $iStatu
 			<span class="EBselect"><input type="checkbox"> INFO</span>
 			<span class="EBomit"><input type="checkbox" title="Skip if there is no additional information"></span>
 		</div>
-		<div class="EBmoveable"
+		<div id="APPTBYWHO" class="EBmoveable"
+			draggable="true"
+			ondragend="EB_dragEnd();"
+			ondragover="EB_dragOver(event);"
+			ondragstart="EB_dragStart(event);">
+			<span class="EBselect"><input type="checkbox"> APPT BY WHO</span>
+			<span class="EBomit hidden"><input type="checkbox" title="Skip if the name is missing"></span>
+		</div>
+		<div id="APPTBYINTERNET" class="EBmoveable"
 			draggable="true"
 			ondragend="EB_dragEnd();"
 			ondragover="EB_dragOver(event);"
@@ -4071,91 +4281,120 @@ function InsertNewAppt($iName, $iPhone, $iEmail, $iTags, $iNeed, $iInfo, $iStatu
 			<span class="EBselect"><input type="checkbox"> APPT BY INTERNET</span>
 			<span class="EBomit"><input type="checkbox" title="Skip if not self-registerd by internet"></span>
 		</div>
-		<div class="EBmoveable"
+		<div id="CONTACTHISTORY" class="EBmoveable"
 			draggable="true"
 			ondragend="EB_dragEnd();"
 			ondragover="EB_dragOver(event);"
 			ondragstart="EB_dragStart(event);">
 			<span class="EBselect"><input type="checkbox"> CONTACT HISTORY</span>
-			<span class="EBomit"><input type="checkbox" title="Skip if there WAS contact history"></span>
+			<span class="EBomit hidden"><input type="checkbox" title="Skip if there WAS contact history"></span>
 		</div>
 	</div> <!-- EBlist -->
 	<div>
 		<center>
+<?php
+		global $ApptView, $Date;
+		$d = ($ApptView == "ViewDaily") ? 'inline' : 'none' ;
+		$dt = date("M j, Y", strtotime($Date));
+		echo "<span style='display:$d'><input id='EBOneDay' type='checkbox' /> $dt only<br /></span>";
+?>
 		<button id="EBPrint" onclick="Print_Excel();">Export</button>
-		<button id="EBCancel" onclick="Hide_ExportBox();">Cancel</button>
+		<button id="EBCancel" onclick="ExportBox.style.visibility = 'hidden';">Cancel</button>
 		</center>
 	</div>
-</div>
+</div> <!-- ExportBox -->
 
-<div id="SearchBox">
+<div id='SearchBox'>
+	<div id="SearchHeaderDiv">
+	<center>
 	<b>Appointment Search</b>
 	<hr />
-	<div>
-		Search by:
-			<span id="FindByTagsButton" onclick="Show_SearchBox(this.id);">
-				<input id="FindByTags" type="radio" name="FindOption" <?php if ($FormApptNo == "FindByTags") echo "checked"; ?> />
-				Tag</span>
-			<span id="FindByPhoneButton" onclick="Show_SearchBox(this.id);">
-				<input id="FindByPhone" type="radio" name="FindOption" <?php if ($FormApptNo == "FindByPhone") echo "checked"; ?> />
-				Phone</span>
-			<span id="FindByNameButton" onclick="Show_SearchBox(this.id);">
-				<input id="FindByName" type="radio" name="FindOption" <?php if ($FormApptNo == "FindByName") echo "checked"; ?> />
-				Name</span>
-			<span id="FindByEmailButton" onclick="Show_SearchBox(this.id);">
-				<input id="FindByEmail" type="radio" name="FindOption" <?php if ($FormApptNo == "FindByEmail") echo "checked"; ?> />
-				Email</span>
-	</div>
-	<br />
-	<input id="FindByVal" type="text" onkeyup="Test_For_Enter(this.id, event)" value="<?php global $FindByVal; echo $FindByVal;?>" />
-	<hr />
-	<div id="SearchResults">
-	<?php Show_Search() ?>
-	</div>
-	<button id="FindButton" onclick="Find_Appointment();">Search</button>
-	<button id="HideTest" onclick="SearchBox.style.visibility='hidden';">Close</button>
-</div>
+<?php
+	global $FormApptNo;
+	global $FindByVal;
 
-</div> <!-- Slots -->
-</div> <!-- Main -->
+	// Show the header for a new appointment added
+	$show = ($FormApptNo == "FindByPhoneOrEmail") ? "block" : "none" ;
+	$header = "<span id='AddHeader' style='display: $show'>";
+	$header .= "Other appointments found that match:";
+	$header .= "<br />$Name_icon = by name";
+	$header .= ", $Phone_icon = by phone number";
+	$header .= ", $Email_icon = by email";
+	$header .= "</span>";
+	echo $header;
+
+	// Show the header for a search
+	$show = ($FormApptNo != "FindByPhoneOrEmail") ? "block" : "none" ;
+	$header = "<span id='SearchHeader' style='display: $show'>\n";
+	$header .= "Search by:\n";
+	$checked = ($FormApptNo == "FindByTags") ? "checked" : "" ;
+	$header .= "<input id='FindByTags' type='radio' name='FindOption' $checked onclick='Show_SearchBox(id);' /> Tag\n";
+	$checked = ($FormApptNo == "FindByPhone") ? "checked" : "" ;
+	$header .= "<input id='FindByPhone' type='radio' name='FindOption' $checked onclick='Show_SearchBox(id);' /> Phone\n";
+	$checked = ($FormApptNo == "FindByName") ? "checked" : "" ;
+	$header .= "<input id='FindByName' type='radio' name='FindOption' $checked onclick='Show_SearchBox(id);' /> Name\n";
+	$checked = ($FormApptNo == "FindByEmail") ? "checked" : "" ;
+	$header .= "<input id='FindByEmail' type='radio' name='FindOption' $checked onclick='Show_SearchBox(id);' /> EMail\n";
+	$header .= "<br />";
+	$header .= "<input id='FindByVal' type='text' onkeyup='Test_For_Enter(this.id, event)' value='$FindByVal'>\n";
+	$header .= "<br />&nbsp;";
+	$header .= "</span>\n";
+	
+	// Close and print the header
+	$header .= "</div> <!-- SearchHeaderDiv -->\n";
+	echo $header;
+	
+	// Show the search list
+	$searchlist = "";
+	$searchlist .= "<div id='SearchTableDiv'>\n";
+	$searchlist .= Show_Searchlist();
+	$searchlist .= "</div> <!-- SearchTableDiv -->\n";
+	echo $searchlist;
+
+	// Show the buttons
+	
+	echo "<div id='SearchButtonDiv'>";
+	$show = ($FormApptNo == "FindByPhoneOrEmail") ? "none" : "inline" ;
+	echo "<hr /><button id='SearchButton' style='display: $show;' onclick='Find_Appointment();'>Search</button>\n";
+	echo "<button id='HideTest' onclick='SearchBox.style.visibility=\"hidden\";'>Close</button>\n";
+	echo "</div> <!-- searchButtons -->";
+?>
+</div> <!-- SearchBox -->
 
 <div id="MoveBox" style="visibility:<?php global $MoveBox; echo $MoveBox; ?>;">
 	<div id="CopyBoxMessage">
 		<b>You are copying the appointment for <span id="CopyName">TITLE</span></b>
 		<hr />
 		Click on the calendar date and time slot you want the appointment moved to,
-		<br />or click on "Cancel" to leave this client where they are without a new copy.
-		<br /><button class="MoveCancel" onclick="ApptOp('Cancel')">Cancel</button>
+		<br />or click on <button class="MoveCancel" onclick="ApptOp('Cancel')">Cancel</button>
+		to leave this client where they are without a new copy.
 	</div>
 	<div id="MoveBoxMessage">
 		<b>You are moving the appointment for <span id="MoveName">TITLE</span></b>
 		<hr />
 		Click on the calendar date and time slot you want the appointment moved to,
-		<br />or click on "Cancel" to leave this client where they are.
-		<br /><button class="MoveCancel" onclick="ApptOp('Cancel')">Cancel</button>
+		<br />or click on <button class="MoveCancel" onclick="ApptOp('Cancel')">Cancel</button>
+		to leave this client where they are.
+		<span id='MoveAndReserveOption'><br /><input id='MoveAndReserve' type='checkbox' />
+			Check to mark the old time slot as RESERVED.</span>
 	</div>
-</div>
+</div> <!-- MoveBox -->
 
 <div id="WaitBox" style="display: none;">
 	<img id="gato" src="Images/gatoloading.gif">
-</div>
+</div> <!-- WaitBox -->
 
+<script>
 <?php
-	global $ApptView, $OtherAppts, $FormApptPhone, $FormApptEmail, $FormApptName;
-	if (($OtherAppts) AND ($ApptView != "ViewUser")) {
-		echo "<script>\n";
-		$showName = _Show_Chars($FormApptName, "text");
-		$msgtext = "Other appointments with name " . $showName;
-		if ($FormApptPhone) $msgtext .= "\\nor phone number $FormApptPhone";
-		if ($FormApptEmail) $msgtext .= "\\nor email " . _Show_Chars($FormApptEmail, "text");
-		// Prepare OtherAppts contents by escaping backslashes and quotes
-		$OtherAppts = str_replace("%5C", "%5C%5C", $OtherAppts); // \
-		$OtherAppts = str_replace("%22", "%5C%22", $OtherAppts); // "
-		$msgtext .= ":\\n\\n" . _Show_Chars($OtherAppts, "text");
-		echo "alert(\"" . $msgtext . "\");";
-		echo "</script>\n";
-	}
+	global $ApptView, $ShowSearchBox, $Site;
+	$view = ($ShowSearchBox) ? "visible" : "hidden" ;
+	echo "SearchBox.style.visibility = \"$view\";\n";
 ?>
+</script>
+
+<div id="SiteTables" class="slots" style="display: none;"> <!-- for Debugging -->
+<?php //Print_Sites(); ?>
+</div> <!-- SiteTables -->
 
 </body>
 </html>

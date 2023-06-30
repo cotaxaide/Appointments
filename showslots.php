@@ -1,4 +1,9 @@
 <?php
+// Version 9.00
+// 	Added new option to prevent User adding self to CB list
+// 	Fixed not showing appointments as scheduled but in phone match list
+// Version 8.03
+// 	Highlight the appt line changed like when moved
 // Version 8.01
 // 	Minor messaging changes for User View
 //	Added attachments to User View instructions
@@ -18,7 +23,6 @@ function Show_Slots() {
 	global $TodayDate;
 	global $APPT_TABLE;
 	global $MyTimeStamp;
-	global $BgColor;
 	global $ApptNo;
 	global $ApptTimeDisplay;
 	global $ApptName;
@@ -30,47 +34,34 @@ function Show_Slots() {
 	global $ApptNeed;
 	global $ApptInfo;
 	global $ApptStatus;
+	global $ApptMatch;
 	global $DeleteCode;
-	global $SingleSite;
-	global $FormApptDate;
 	global $FormApptOldNo;
-	global $FormApptLoc;
 	global $CustEList;
 	global $CustPList;
-	global $OpenAppt;
-	global $LocationShow;
-	global $LocationList;
-	global $LocationLookup;
-	global $LocationMessage;
-	global $LocationInstructions;
-	global $LocationName;
-	global $LocationInet;
-	global $LocationInetLimit;
-	global $LocationIsOpen;
-	global $LocationOpen;
-	global $LocationClosed;
-	global $LocationSumRes;
-	global $Location10dig;
-	global $LocationCBList, $LocationEmpty;
-	global $LocationAttachHTML;
+	global $Site;
 	global $ShowDagger;
-	global $SitePermissions, $ADD_APP, $ADD_CB, $USE_RES;
-	global $UserPermissions, $MaxPermissions;
+	global $ADD_APP, $ADD_CB, $USE_RES;
+	global $VIEW_APP, $VIEW_CB;
 	global $ADMINISTRATOR, $MANAGER;
 	global $WaitSequence;
 	global $LastSlotNumber;
+	global $SiteListCount;
 	global $HeaderText;
 	global $ApptView;
 	global $UserFirst;
 	global $UserLast;
 	global $UserEmail;
-	global $UserOptions;
 	global $UserPhone;
 	global $UserHome;
 	global $UsedCBSlots;
 	global $YR, $MO, $DY, $YMD, $MON, $DOW;
 	global $ApptGroupList, $ApptGroupListIndex;
 	global $RESERVED;
+	global $isDeleted, $isArchived;
+	global $MaxPermissions;
+	global $SaveMatchLoc;
+	global $InfoMatch;
 		
 		$SlotNumber = 0;
 		$SlotIndex = 0;
@@ -85,19 +76,27 @@ function Show_Slots() {
 		$ApptNeed = "";
 		$ApptInfo = "";
 		$ApptStatus = "";
+		$ApptMatch = "";
 		$LastSlotNumber = 0;
 		$WaitSequence = 0;
 
 	// -----------------------------------------------------------------------------------------
 	if ($ApptView == "ViewDeleted") {
 	// -----------------------------------------------------------------------------------------
-		echo "<div class='slotlist'>\n";
-		echo "<table id='daily_table' class='apptTable'>";
+		$header = "<div class='slotlist'>\n";
+		$header .= "<table id='daily_table' class='apptTable'>";
+		$header .= "<tr class='apptGroup'>\n";
+		$header .= "<th colspan='2' class='sticky left'>Deleted List:</th>\n";
+		$header .= "<th class='center apptPhone sticky'></th>\n";
+		$header .= "<th class='apptNeed sticky'></th>\n";
+		$header .= "<th class='apptNeed sticky'></th>\n";
+		$header .= "<th class='apptStatus sticky'></th></tr>\n";
+		echo $header;
 
 		//Fetching from the database table.
 		$query = "SELECT * FROM $APPT_TABLE";
 		$query .= " WHERE `appt_date` = '$NullDate'";
-		$query .= " AND `appt_type` = 'D'";
+		$query .= " AND `appt_type` LIKE 'D%'";
 		$query .= " ORDER BY `appt_location`, `appt_name`";
 		$appointments = mysqli_query($dbcon, $query);
 		$SaveWaitSequence = 0;
@@ -111,16 +110,25 @@ function Show_Slots() {
 			$Status = htmlspecialchars_decode($row["appt_status"] ?? '');
 			$Email = $row["appt_email"];
 			$Appt = $row["appt_no"];
-			//$Hour = substr($Time, 0, 2);
 			$Location = $row["appt_location"];
-			$LocationIndex = $LocationLookup["S" . $Location];
-			$Location10digreq = @$Location10dig[$LocationIndex];
-			if ($LocationIndex AND $LocationShow[$LocationIndex]) {
+
+			$ThisSite = $Site["S" . $Location];
+			$Location10digreq = $ThisSite["10dig"];
+
+			$apptType = explode("|", $row['appt_type']);
+			$isDeleted = $apptType[0] ?? "";
+			$isArchived = $apptType[1] ?? "";
+			if($isArchived) continue;
+			
+			// Is the user allowed to view the deleted list?
+			if (! ($ThisSite["Permissions"] & $VIEW_APP)) continue;
+
+			if ($ThisSite["Show"]) {
 
 				// New location header
 				if ($Location != $OldLoc) { // Add a new group header
 					echo "<tr class='apptLoc'>\n";
-					echo "<th class='sticky left' colspan='2'>Deleted List (" . $LocationName[$LocationIndex] . ")</th>";
+					echo "<th class='sticky left' colspan='2'>Deleted List (" . $ThisSite["Name"] . ")</th>";
 					if ($OldLoc) {
 						echo "<th></th><th></th><th></th><th></th></tr>\n";
 					}
@@ -138,28 +146,31 @@ function Show_Slots() {
 				$SlotNumber++; // Index number into a local array of displayed appointments
 				$SlotIndex++; // Visual index on the screen, resets on change of group
 				$myclass = "";
+				$InfoMatch = "";
+
 				// Add tags to the name if they are present
-				List_Slot($Appt, $SlotNumber, $SlotIndex, $myclass, $Name, $Phone, $Tags, $Need, $Info, $Status);
+				List_Slot($Appt, $SlotNumber, $SlotIndex, $myclass, $Name, $Phone, $Tags, $Need, $Info, $Status, $Location);
 
 				// Add the record to the arrays
 				$LastSlotNumber = $SlotNumber;
 				$ApptNo .= ", \"$Appt\"";
 				$ApptName .= ", \"$Name\"";
 				$ApptPhone .= ", \"$Phone\"";
-				$ApptEmail .= ", \"" . htmlspecialchars_decode($Email ?? '') . "\"";
-				$ApptSite .= ", \"$LocationIndex\"";
+				$ApptEmail .= ", \"$Email\"";
+				$ApptSite .= ", \"$Location\"";
 				$Appt10dig .= ", \"$Location10digreq\"";
 				$ApptTags .= ", \"$Tags\"";
 				$ApptNeed .= ", \"$Need\"";
 				$ApptInfo .= ", \"$Info\"";
 				$ApptStatus .= ", \"$Status\"";
 				$ApptTimeDisplay .= ", \"$NullTime\"";
+				$ApptMatch .= ", \"$InfoMatch\"";
 			}
 		}
 
 		echo "</table>\n";
 		echo "</div>\n";
-		$appointments = []; // release memory
+		unset($appointments); // release memory
 
 	} // End of Deleted view
 		
@@ -171,7 +182,7 @@ function Show_Slots() {
 		echo "<div class='slotlist'>\n";
 		echo "<table id='daily_table' class='apptTable'>\n";
 		$AddSlotLoc = "";
-		$HomeIndex = $LocationLookup["S" . $UserHome];
+		$HomeSite = $Site["S" . $UserHome];
 		if ($ApptView == "ViewCallback") {
 			$FirstSlotDate = $NullDate;
 			$HeaderText = "Callback List:";
@@ -188,11 +199,11 @@ function Show_Slots() {
 			}
 		}
 		echo "<tr class='apptGroup'>\n";
-		echo "<th colspan='2' class='sticky left'>$HeaderText</th>\n";
-		echo "<th class='center apptPhone sticky'>Phone</th>\n";
-		echo "<th class='apptNeed sticky'>Note</th>\n";
-		echo "<th class='apptNeed sticky'>Info</th>\n";
-		echo "<th class='apptStatus sticky'>Status</th>\n";
+		echo "<th colspan='6' class='sticky left'>$HeaderText</th>\n";
+		//echo "<th class='center apptPhone sticky'>Phone</th>\n";
+		//echo "<th class='apptNeed sticky'>Note</th>\n";
+		//echo "<th class='apptNeed sticky'>Info</th>\n";
+		//echo "<th class='apptStatus sticky'>Status</th>\n";
 
 
 		//Fetching from the database table.
@@ -208,12 +219,11 @@ function Show_Slots() {
 
 		$OldLoc = 0;
 		$OldTime = 0;
-		$SaveAppt = []; // Stores the appt number of the last empty callback list appt encountered
+		$SaveAppt = array(); // Stores the appt number of the last empty callback list appt encountered
 		$ApptGroupList = array();
 		$ApptGroupListIndex = 0;
 		$SaveWaitSequence = 0;
 		while($row = @mysqli_fetch_array($appointments)) {
-			$Type = $row["appt_type"];
 			$Date = $row["appt_date"];
 			$Time = $row["appt_time"];
 			$Name = htmlspecialchars_decode($row["appt_name"] ?? '');
@@ -224,19 +234,31 @@ function Show_Slots() {
 			$Status = $row["appt_status"];
 			$Email = $row["appt_email"];
 			$Appt = $row["appt_no"];
-			//$Hour = substr($Time, 0, 2); // may be a problem with $Time here, causes error
 			$WaitSequence = $row["appt_wait"];
 			$Location = $row["appt_location"];
-			$LocationIndex = $LocationLookup["S" . $Location];
-			@$Location10digreq = $Location10dig[$LocationIndex];
-			$SkipThisEntry = false;
-			if ($LocationIndex and (@$LocationShow[$LocationIndex]) and ($Type != $DeleteCode)) {
+
+			$ShowThisEntry = true;
+			$ThisSite = $Site["S" . $row["appt_location"]];
+			$Location10digreq = $ThisSite["10dig"];
+
+			$apptType = explode("|", $row['appt_type']);
+			$isDeleted = $apptType[0] ?? "";
+			$isArchived = $apptType[1] ?? "";
+			if ($isArchived) continue;
+
+			// Is this person allowed to see entries for this site?
+			// OK to list the appointments?
+			if ($ApptView == "ViewDaily") $OKtoView = $ThisSite["Permissions"] & $VIEW_APP;
+			else $OKtoView = $ThisSite["Permissions"] & $VIEW_CB;
+			if (! $OKtoView) continue;
+
+			if ($ThisSite["Show"] and (! $isDeleted)) {
 
 				// New time
 				if ($Time == $NullTime) { // This is a callback list entry
 					if ($Name == "") {
 						// Skip if no name has been assigned. We'll add one later
-						$SkipThisEntry = true;
+						$ShowThisEntry = false;
 						// Save the appt number of the blank callback entry for the site
 						$SaveAppt[$Location] = $Appt; 
 						$SaveWaitSequence = $WaitSequence;
@@ -247,21 +269,23 @@ function Show_Slots() {
 					$ShowTime = Format_Time($Time, false);
 				}
 	
-				// New location and/or time header
-				if (($Time != $OldTime) OR ($Location != $OldLoc)) { // Add a new group header
+				// New location and/or time ?
+				if (($Time != $OldTime) OR ($Location != $OldLoc)) {
 
-					List_Group();
+					// List the previous group
+					if ($OldLoc != 0) List_Group($OldLoc);
 
+					// If a callback list, add an empty record at the end of the group
 					if (($OldTime == $NullTime) and ($OldLoc != 0)) { // end of a site callback list
 						if ($OldLoc == 0) {
 							$OldLoc = $Location;
-							$OldLocIndex = $LocationIndex;
+							$OldLocIndex = $Location;
 						}
 						// update the empty record if one exists
 						$SlotNumber++; // Index number into a local array of displayed appointments
 						$SlotIndex++; // Visual index on the screen, resets on change of group
 						if ($SaveWaitSequence < $_SESSION["MaxWaitSequence"]) $SaveWaitSequence = ++$_SESSION["MaxWaitSequence"];
-						if ($SaveAppt[$OldLoc]) {
+						if ($SAOL = $SaveAppt[$OldLoc]) {
 							$query = "UPDATE $APPT_TABLE SET";
 							$query .= "  `appt_wait` = $SaveWaitSequence";
 							$query .= ", `appt_phone` = ''";
@@ -272,53 +296,68 @@ function Show_Slots() {
 							$query .= ", `appt_email` = ''";
 							$query .= ", `appt_location` = $OldLoc";
 							$query .= ", `appt_change` = '$MyTimeStamp'";
-							$query .= " WHERE `appt_no` = $SaveAppt[$OldLoc]";
+							$query .= " WHERE `appt_no` = $SAOL";
 							mysqli_query($dbcon, $query);
 						}
 
 						$myclass = "apptOpen";
-						List_Slot($SaveAppt[$OldLoc], $SlotNumber, $SlotIndex, $myclass, "", "", "", "", "", "");
+						$InfoMatch = "";
+
+						List_Slot($SaveAppt[$OldLoc], $SlotNumber, $SlotIndex, $myclass, "", "", "", "", "", "", $OldLoc);
 
 						// Add the slot to the site arrays
 						$LastSlotNumber = $SlotNumber;
-						$ApptNo .= ", \"$SaveAppt[$OldLoc]\"";
+						$ApptNo .= ", \"$SAOL\"";
 						$ApptName .= ", \"\"";
 						$ApptPhone .= ", \"\"";
 						$ApptEmail .= ", \"\"";
-						$ApptSite .= ", \"$OldLocIndex\"";
+						$ApptSite .= ", \"$OldLoc\"";
 						$Appt10dig .= ", \"$Location10digreq\"";
 						$ApptTags .= ", \"\"";
 						$ApptNeed .= ", \"\"";
 						$ApptInfo .= ", \"\"";
 						$ApptStatus .= ", \"\"";
 						$ApptTimeDisplay .= ", \"$ShowTime\"";
-						$SaveAppt[$OldLoc] = 0; // Used the empty record
+						$ApptMatch .= ", \"$InfoMatch\"";
+
+						// Indicate the empty record has been used
+						$SaveAppt[$OldLoc] = 0;
 					}
-					$TimeHeader = "$ShowTime (" . $LocationName[$LocationIndex] . ")";
-					if (($ApptView == "ViewDaily") AND ($UserPermissions & ($MANAGER | $ADMINISTRATOR))) {
-						$Lno = $LocationList[$LocationIndex];
-						$SitePermission = @$SitePermissions["S" . $Lno];
-						if (($UserOptions === "A") or (@$SitePermission & $MANAGER)) {
-							$Stime = substr($Time, 0, 5);
-							$TimeHeader .= " <div class=\"Do1Slot\"";
-							$TimeHeader .= " onclick=\"Do1Slot('add', '$Lno', '$FirstSlotDate', '$Stime');\"";
-							$TimeHeader .= " title=\"Add a new appointment slot for " . $ShowTime . ".\">+</div>";
-							$TimeHeader .= " <div class=\"Do1Slot\"";
-							$TimeHeader .= " onclick=\"Do1Slot('rmv', '$Lno', '$FirstSlotDate', '$Stime');\"";
-							$TimeHeader .= " title=\"Remove an unused appointment slot for " . $ShowTime . ".\">-</div>";
-							if (($AddSlotLoc == "") OR ($Lno == $LocationList[$HomeIndex])) $AddSlotLoc = $Lno;
-						}
+
+					$TimeHeader = "$ShowTime (" . $ThisSite["Name"] . ")";
+
+					// Add + and - buttons to the header for Managers and Administrators
+					if (($ApptView == "ViewDaily") AND ($ThisSite["Permissions"] & ($MANAGER | $ADMINISTRATOR))) {
+						$SiteIndex = $ThisSite["Index"];
+						$Stime = substr($Time, 0, 5);
+						$TimeHeader .= " <div class=\"Do1Slot\"";
+						$TimeHeader .= " onclick=\"Do1Slot('add', '$SiteIndex', '$FirstSlotDate', '$Stime');\"";
+						$TimeHeader .= " title=\"Add a new appointment slot for " . $ShowTime . ".\">+</div>";
+						$TimeHeader .= " <div class=\"Do1Slot\"";
+						$TimeHeader .= " onclick=\"Do1Slot('rmv', '$SiteIndex', '$FirstSlotDate', '$Stime');\"";
+						$TimeHeader .= " title=\"Remove an unused appointment slot for " . $ShowTime . ".\">-</div>";
+						if (($AddSlotLoc == "") OR ($SiteIndex == $UserHome)) $AddSlotLoc = $SiteIndex;
 					}
-					echo "<tr class='apptLoc bold left'><th colspan='2'>$TimeHeader</th>\n";
-					$TimeHeaderCB = Add_CB_Status("", $LocationIndex);
-					echo "<td colspan='4'>$TimeHeaderCB</td></tr>\n";
+
+					// Print the header
+					$header = "<tr class='apptLoc bold left'><th class='sticky' colspan='2'>$TimeHeader</th>\n";
+
+					// Add the Callback list count to the header
+					$TimeHeaderCB = Add_CB_Status("", $ThisSite);
+					$header .= "<th class='center apptPhone sticky'>Phone</th>\n";
+					$header .= "<th class='apptNeed sticky'>Note</th>\n";
+					$header .= "<th class='apptNeed sticky'>Info</th>\n";
+					$header .= "<th class='apptStatus sticky'>Status</th></tr>\n";
+					echo $header;
+
+					// Prepare to detect the next time/location grouo
 					$OldTime = $Time;
 					$OldLoc = $Location;
-					$OldLocIndex = $LocationIndex;
 					$SlotIndex = 0;
 				}
 
-				if (! $SkipThisEntry) { 
+				if ($ShowThisEntry) { 
+					$InfoMatch = "";
 					$SlotNumber++; // Index number into a local array of displayed appointments
 					$SlotIndex++; // Visual index on the screen, resets to 1 on change of group
 
@@ -327,14 +366,38 @@ function Show_Slots() {
 						$GroupType = 1; // has a name in it
 						if ($Name == "") $GroupType = 2;
 						if ($Name == $RESERVED) $GroupType = 3;
-						$ApptGroupItem = array($GroupType, $Appt, $SlotNumber, $SlotIndex, $myclass, $Name, $Phone, $Tags, $Need, $Info, $Status);
+						$ApptGroupItem = array($GroupType, $Appt, $SlotNumber, $SlotIndex, $myclass, $Name, $Phone, $Tags, $Need, $Info, $Status, $Location);
 						$ApptGroupListIndex++;
 						$ApptGroupList[$ApptGroupListIndex] = $ApptGroupItem;
 						$ApptGroupItem = $ApptGroupList[$ApptGroupListIndex];
 						// List_Slot will be called via List_Group when the location or time changes
 					}
 					else { // ViewCallback
-						List_Slot($Appt, $SlotNumber, $SlotIndex, $myclass, $Name, $Phone, $Tags, $Need, $Info, $Status);
+						// Add a message about other appointments
+						if (($Phone != "") and ($Phone != "000-000-0000")) {
+							if (($size = sizeof(($marr = $SaveMatchLoc["Phone"][$Phone]))) > 1) {
+								for ($j = 0; $j < $size; $j++) {
+									$m = explode("|", $marr[$j]);
+									if ($m[0] != $ThisSite["Index"]) {
+										$mboth = ($m[1] == "CE") ? " and email" : "" ;
+										$mtype = (($m[1] == "C") || $mboth) ? "is on the callback list" : "has an appointment" ;
+										$InfoMatch .= "<br /> - $m[2] $mtype at the " . $Site["S" . $m[0]]["Name"] . " with the same phone number$mboth.";
+									}
+								}
+							}
+						}
+						if ($Email != "") {
+							if (($size = sizeof(($marr = $SaveMatchLoc["Email"][$Email]))) > 1) {
+								for ($j = 0; $j < $size; $j++) {
+									$m = explode("|", $marr[$j]);
+									if ($m[0] != $ThisSite["Index"]) {
+										$mtype = ($m[1] == "C") ? "is on the callback list" : "has an appointment" ;
+										$InfoMatch .= "<br /> - $m[2] $mtype at the " . $Site["S" . $m[0]]["Name"] . " with the same email.";
+									}
+								}
+							}
+						}
+						List_Slot($Appt, $SlotNumber, $SlotIndex, $myclass, $Name, $Phone, $Tags, $Need, $Info, $Status, $Location);
 					}
 
 					$LastSlotNumber = $SlotNumber;
@@ -342,19 +405,19 @@ function Show_Slots() {
 					$ApptName .= ", \"$Name\"";
 					$ApptPhone .= ", \"$Phone\"";
 					$ApptEmail .= ", \"$Email\"";
-					$ApptSite .= ", \"$LocationIndex\"";
+					$ApptSite .= ", \"$Location\"";
 					$Appt10dig .= ", \"$Location10digreq\"";
 					$ApptTags .= ", \"$Tags\"";
 					$ApptNeed .= ", \"$Need\"";
 					$ApptInfo .= ", \"$Info\"";
 					$ApptStatus .= ", \"$Status\"";
 					$ApptTimeDisplay .= ", \"$ShowTime\"";
+					$ApptMatch .= ", \"$InfoMatch\"";
 				}
 			}
 		}
 
-		List_Group();
-
+		List_Group($OldLoc);
 	
 		if (($ApptView == "ViewCallback") and ($OldLoc != "")) { // end of last callback list, add a final blank slot
 			$SlotNumber++; // Index number into a local array of displayed appointments
@@ -362,7 +425,7 @@ function Show_Slots() {
 			if ($OldLoc == 0) $OldLoc = $Location;
 			if ($SaveWaitSequence < $_SESSION["MaxWaitSequence"]) $SaveWaitSequence = ++$_SESSION["MaxWaitSequence"];
 			// add a blank record if one exists
-			if ($SaveAppt[$OldLoc]) {
+			if ($SAOL = $SaveAppt[$OldLoc]) {
 				$query = "UPDATE $APPT_TABLE SET";
 				$query .= "  `appt_wait` = $SaveWaitSequence";
 				$query .= ", `appt_phone` = ''";
@@ -373,25 +436,28 @@ function Show_Slots() {
 				$query .= ", `appt_email` = ''";
 				$query .= ", `appt_location` = $OldLoc";
 				$query .= ", `appt_change` = '$MyTimeStamp'";
-				$query .= " WHERE `appt_no` = $SaveAppt[$OldLoc]";
+				$query .= " WHERE `appt_no` = $SAOL";
 				mysqli_query($dbcon, $query);
 			}
 
 			$myclass = "apptOpen";
-			List_Slot($SaveAppt[$OldLoc], $SlotNumber, $SlotIndex, $myclass, "", "", "", "", "", "");
+			$InfoMatch = "";
+
+			List_Slot($SaveAppt[$OldLoc], $SlotNumber, $SlotIndex, $myclass, "", "", "", "", "", "", $OldLoc);
 
 			// Add the slot to the site arrays
 			$LastSlotNumber = $SlotNumber;
-			$ApptNo .= ", \"$SaveAppt[$OldLoc]\"";
+			$ApptNo .= ", \"$SAOL\"";
 			$ApptName .= ", \"\"";
 			$ApptPhone .= ", \"\"";
 			$ApptEmail .= ", \"\"";
-			$ApptSite .= ", \"$OldLocIndex\"";
+			$ApptSite .= ", \"$OldLoc\"";
 			$ApptTags .= ", \"\"";
 			$ApptNeed .= ", \"\"";
 			$ApptInfo .= ", \"\"";
 			$ApptStatus .= ", \"\"";
 			$ApptTimeDisplay .= ", \"$ShowTime\"";
+			$ApptMatch .= ", \"\"";
 			$SaveAppt[$OldLoc] = 0; // We used it
 		}
 
@@ -399,33 +465,34 @@ function Show_Slots() {
 
 		// Add the new slot options for the callback list
 		if ($ApptView == "ViewCallback") {
-			if ($UserPermissions & ($ADMINISTRATOR | $MANAGER)) {
-			echo "<br /><br />\n";
-				echo "Add <input id='SlotsToAdd' type='number' size='1' maxlength='2' /> additional reserved entries for the ";
+			if (($MaxPermissions & $ADD_CB) | $ADMINISTRATOR | $MANAGER) {
+				echo "<br /><br />\n";
+				echo "Add <input id='SlotsToAdd' type='number' style='width: 3em' /> additional reserved entries for the ";
 				echo "<select id=\"LocationToAdd\">\n";
 				echo "<option value=\"0\">Choose a site</option>\n";
-				if ($OldLoc == "") $OldLoc = $LocationList[$HomeIndex];
-				List_Locations($OldLoc);
+				if ($OldLoc == "") $OldLoc = $UserHome;
+				List_Locations($ADD_CB);
 				echo "</select>\n";
 				echo "<button onclick='AddCBSlots()'>(Click to add)</button>\n";
 			}
-			else if ($LocationShow[$HomeIndex] AND ($UserPermissions & $ADD_CB)) {
+			else if ($ThisSite["Show"] AND ($ThisSite["Permissions"] & $ADD_CB)) {
 				echo "<br /><br />\n";
 				echo "<button onclick='AddCBSlots()'>Click to add...</button>\n";
-				echo "<input id='SlotsToAdd' type='number' size='1' maxlength='2' /> additional blank entries for the " . $LocationName[$HomeIndex];
+				//NFGecho "<input id='SlotsToAdd' type='number' size='1' maxlength='2' /> additional blank entries for the " . $LocationName[$HomeIndex];
+				echo "<input id='SlotsToAdd' type='number' size='1' maxlength='2' /> additional blank entries for the " . $Site["S" . $UserHome]["Name"];
 			}
 		}
 		
 		// Add the new time group options to the daily view
-		if (($ApptView == "ViewDaily") AND ($UserPermissions & ($ADMINISTRATOR | $MANAGER))) {
+		if (($ApptView == "ViewDaily") AND ($MaxPermissions & ($ADMINISTRATOR | $MANAGER))) {
 			echo "<br /><br />\n";
-			if ($AddSlotLoc == "") $AddSlotLoc = $LocationList[$HomeIndex];
+			if ($AddSlotLoc == "") $AddSlotLoc = $UserHome;
 			echo "Add a new time group at\n";
 			echo "<input id='TimeToAdd' type='time' /> with\n";
-			echo "<input id='NewSlotsToAdd' type='number' size='1' maxlength='2' value='1'> slot(s) to the\n";
+			echo "<input id='NewSlotsToAdd' type='number' style='width:3em;' value='1'> slot(s) to the\n";
 			echo "<select id=\"LocationToAdd\">\n";
 			echo "<option value=\"0\">Choose a site</option>\n";
-			List_Locations($AddSlotLoc);
+			List_Locations($ADD_APP);
 			echo "</select>\n";
 			echo "<button onclick='AddNewTime(\"$FirstSlotDate\")'>(Click to add)</button>\n";
 		}
@@ -439,16 +506,16 @@ function Show_Slots() {
 
 		$InetLimited = false;
 		$onCallback = false;
+		$InetLocationSelected = 0;
 		if ($ApptView == "ViewUser") { // Show an instruction header
 			echo "<div class='custTable'>\n";
 			echo "<b>Welcome " . _Show_Chars($UserFirst, "html") . ",";
-			$LocationChosen = $_SESSION["UserLoc"];
-			if ($LocationShow[0] > 0) {
-				for ($i = 1; $i <= $LocationList[0]; $i++) {
-					if ($LocationShow[$i] > 0) $LocationChosen = $LocationList[$i];
+			if ($SiteListCount > 0) {
+				foreach ($Site as $SiteKey => $ThisSite) {
+					if ($ThisSite["Show"]) $InetLocationSelected = $ThisSite["Index"];
 				}
 				echo "<br />To sign up for an appointment:</b><br /><ol>\n";
-				if ($LocationList[0] > 1) {
+				if ($InetLocationSelected === 0) {
 					echo "<li>Select the location you want to consider from the list on the left.";
 					if ($ShowDagger) echo "<br />(Locations marked with a &quot;&dagger;&quot; will need to speak with you first.)";
 					echo "</li>\n";
@@ -458,9 +525,10 @@ function Show_Slots() {
 				echo "<li>In the notes section, indicate which year (if not the current year) and if it is an amended return. Also, enter any other information you think we might need (interpreter, access issues, alternative phone, etc).</li>\n";
 				echo "<li>Click on the &quot;Save&quot; button to finalize the appointment.</li>\n";
 
-				// Check to be sure email notification is enabled
-				if ($LocationChosen > 0) {
-					$msg = @$LocationMessage[$LocationLookup["S" . $LocationChosen]];
+				// Add a final step if email notification is enabled
+				if ($InetLocationSelected) {
+					$ThisSite = $Site["S" . $InetLocationSelected];
+					$msg = $ThisSite["Message"];
 					if (substr($msg, 0, 4) != "NONE") {
 						echo "<li>You will be sent confirmation of your appointment to the email address you entered. (Check your SPAM/junk mail folder too.)</li>\n";
 					}
@@ -469,14 +537,12 @@ function Show_Slots() {
 				echo "</ol>\n";
 
 				// Add the site's instruction block
-				if ($LocationChosen > 0) {
-					$Loc = $LocationLookup["S" . $LocationChosen];
-					if ($Loc) $msg = $LocationInstructions[$Loc];
+				if ($InetLocationSelected) {
+					$msg = $ThisSite["Instructions"];
 					if ($msg) {
-						$msg = Add_Shortcodes($Loc, $msg);
+						$msg = Add_Shortcodes($InetLocationSelected, $msg);
 						echo "<div class='custCB'>";
-						$LocName = $LocationName[$Loc];
-						echo "<b>Additional information for the $LocName:</b><br />";
+						echo "<b>Additional information for the" . $ThisSite["Name"] . ":</b><br />";
 						echo "<div style='padding-left: 1em;'>";
 						echo $msg;
 						echo "</div></div><br />";
@@ -490,19 +556,18 @@ function Show_Slots() {
 
 			// If signed up, show a list of appointments for this user
 			echo "<div id='custList'>\n";
-			echo "<b>You are scheduled at the following time(s):</b><br />\n";
+			echo "<b>You are currently scheduled at the following time(s):</b><br />\n";
 			if ($CustEList == "") {
 				echo "(No appointments scheduled yet.";
-				$inst = (($LocationShow[0] > 0) ? "Choose one below.)" : ")" );
+				$inst = (($SiteListCount > 0) ? " Choose one below.)" : ")" );
 				echo $inst;
 			}
 			else {
 				echo $CustEList;
 				// count the number of colons (time) in the list to see if reservation limit was reached
-				if ($LocationChosen) {
-					$Loc = $LocationLookup["S" . $LocationChosen];
-					$InetLimited = ((substr_count($CustEList, ":")/2) >= $LocationInetLimit[$Loc]);
-					$Teststr = "callback list at the " . $LocationName[$Loc];
+				if ($InetLocationSelected) {
+					$InetLimited = ((substr_count($CustEList, ":") / 2) >= $ThisSite["InetLimit"]);
+					$Teststr = "callback list at the " . $ThisSite["Name"];
 					$onCallback = ((substr_count($CustEList, $Teststr) > 0));
 				}
 			}
@@ -511,9 +576,8 @@ function Show_Slots() {
 				echo $CustPList;
 			}
 			echo "<br /></div><br />\n";
-
 			// If no locations are available, stop here
-			if ($LocationShow[0] == 0) return;
+			if ($SiteListCount == 0) return;
 		}
 
 		// Fetching from the database table.
@@ -524,13 +588,11 @@ function Show_Slots() {
 		$OldLocation = 0;
 		$OpenSlots = 0;
 		$OpenSlotNumber = 0;
-		$OpenLocationIndex = 0;
 		$query = "SELECT * FROM $APPT_TABLE";
 		$query .= " ORDER BY `appt_date`, `appt_location`, `appt_time`, `appt_wait`";
 		$appointments = mysqli_query($dbcon, $query);
 
 		// Add option and color key line
-		//echo "<center>\n"; // not needed
 		if ($ApptView == "ViewSummary") {
 			echo "<div><table id='summary_table_key'>\n";
 			echo "<tr><td>\n";
@@ -554,266 +616,289 @@ function Show_Slots() {
 			echo "<div class='slotuser'>\n";
 		}
 
-
-		// Start a table
+		// Start a table of appointments
 		echo "<table id='summary_table' class='apptTable'>\n";
 
 		while ($row = @mysqli_fetch_array($appointments)) {
 			$Date = $row["appt_date"];
 			$Time = $row["appt_time"];
 			$Location = $row["appt_location"];
-			$DateTimeLoc = $Date . $Time . $Location;
+			$DateTimeLoc = $Date. $Time. $Location;
 			$Name = htmlspecialchars_decode($row["appt_name"] ?? '');
 			$Phone = $row["appt_phone"];
 			$Tags = htmlspecialchars_decode($row["appt_tags"] ?? '');
 			$Need = htmlspecialchars_decode($row["appt_need"] ?? '');
 			$Info = htmlspecialchars_decode($row["appt_info"] ?? '');
 			$Status = htmlspecialchars_decode($row["appt_status"] ?? '');
-			$Type = $row["appt_type"];
 			$Email = $row["appt_email"];
 			$Appt = $row["appt_no"];
-			@$LocationIndex = $LocationLookup["S" . $Location];
-			$NoTR = true; // suppresses the first </tr>
 
-			if (isset($LocationName[$LocationIndex])
-			and (isset($LocationShow[$LocationIndex]))
-			and ($LocationShow[$LocationIndex] > 0)
-			and (($ApptView != "ViewUser") OR ($LocationIsOpen[$LocationIndex]))
-			and (($Date >= $TodayDate) or @$_SESSION["SummaryAll"] or ($Date == $NullDate))) {
+			$ThisSite = $Site["S" . $Location];
+			if ($Location == 1) continue; // Should not happen but...
 
-				// Change restricted site to callback if more on CB list than slots available
-				if (($LocationIndex > 0)
-				AND ($LocationInet[$LocationIndex] == "R")
-				AND (@$LocationCBList[$LocationIndex] >= @$LocationEmpty[$LocationIndex])) {
-					$LocationInet[$LocationIndex] = "C";
-				}
+			$NoTR = true; // suppresses the first row terminator "</tr>"
 
-				// Find an empty callback slot if this is a self-scheduled callback appointment
-				if ($UserHome == 0) {
-					// If site only allows sign-up for Callback list, just add a button to that effect
-					if (($Time == $NullTime) and ($Name == "") and ($Type != $DeleteCode)) {
-						$OpenSlotNumber = $Appt;
-						$OpenLocationIndex = $LocationIndex;
-						if (($Appt > 0) and $LocationIndex and ($LocationInet[$LocationIndex] == "C")) {
-							echo "</table>\n";
-							//echo "</center>\n";
-							echo "<div id='custCB'>\n";
-							echo "<br />The " . $LocationName[$LocationIndex] . " needs to speak with you before scheduling an appointment.";
-							echo "<br />Please click on the following button to give us your contact information:";
-							echo "<br /><button id='custButton' onclick='Add_Appointment($Appt, \"$NullDate\", \"$NullTime\", \"$NullDate\", \"$NullTime\");'>Click to request a callback</button>\n";
-							echo "</div>\n";
-							return;
-						}
-					}
-				}
+			$apptType = explode("|", $row['appt_type']);
+			$isDeleted = $apptType[0] ?? "";
+			$isArchived = $apptType[1] ?? "";
+			
+			// Skip records that should not be displayed
+			if ($isArchived) continue; // Record is archived
+			if (! $ThisSite["Show"]) continue; // Checkbox is not checked
+			if (($ApptView == "ViewUser") AND ($Location != $InetLocationSelected)) continue; // Inet site not selected
+			if (($Date < $TodayDate) AND (! ($_SESSION["SummaryAll"] ?? "")) AND ($Date != $NullDate)) continue; // Earlier than today
+			//error_log("RECORD: $Appt, Date=$Date at $Time, Location=$Location, Show=".$ThisSite["Show"].", $Name"); /* DEBUG */
 
-				if ($Date != $NullDate) {
-					$ShowTime = Format_Time($Time, false);
-					$ShowDate = Format_Date($Date, true); // set $MON which is global
+			// Change restricted site to callback if more on CB list than slots available
+			if (($ThisSite["Inet"] == "R") AND ($ThisSite["AvailCBCount"] >= $ThisSite["AvailCount"])) {
+				$ThisSite["Inet"] = "C";
+			}
 
-					if ($Date != $OldDate) {
-						if ($MON != $OldMonth) {
-							if (! $NoTR) echo "</tr>\n"; // close the prior row but not on the first change
-							//if (! $InetLimited) echo "<tr>\n<td class='calMonth center'>$MON</td>\n<td>";
-							if (! $InetLimited) echo "<tr>\n<td class='calMonth center'>$MON</td>\n<td>";
-							if ($LocationIndex) {
-								$LTitle = $LocationName[$LocationIndex];
-								$LTitle = Add_CB_Status($LTitle, $LocationIndex);
-							}
-							else $LTitle = "";
-							if (! $InetLimited) echo "<div class='apptGroup apptGroupSummary'>" . $LTitle . "</div>\n";
-							$OldLocation = $Location;
-							$OldMonth = $MON;
-						}
-
-						$myclass = "";
-						$ApptAvail = @$DateList[$Date];
-						if ($Date == $FirstSlotDate) {
-				    			$myclass = ($ApptAvail > 0) ? " apptOpen" : " apptFull noSelect";
-						}
-						if ($ApptView == "ViewSummary") {
-							echo "</td></tr>\n<tr>\n";
-							$clickop = "";
-							$myclass = "schedDateSummary";
-							if ($SitePermissions["S" . $Location] & $ADD_APP) {
-								$clickop = "onclick='New_Date(\"" . $Date . "\", 1)'";
-							}
-							else {
-								$myclass = "noSelect"; // hide pointer
-							}
-							echo "<td $clickop class='" . $myclass . "'>$ShowDate</td>\n<td>";
-						}
-						else { // $ApptView is "ViewUser"
-							// only show dates that have open appointments
-							if (! $InetLimited and (@$DateList[$Date] > 0) and ($Date >= $FirstSlotDate)) {
-								echo "</td></tr>\n<tr class='schedDateUser'>\n";
-								echo "<td>$ShowDate</td>\n<td>";
-							}
-						}
-						$OldDate = $Date;
-						$OldTime = "";
-					}
-
-					if ($Location != $OldLocation) {
-						$LTitle = $LocationName[$LocationIndex];
-						$LTitle = Add_CB_Status($LTitle, $LocationIndex);
-						echo "<div class='apptGroup apptGroupSummary'>" . $LTitle . "</div>\n";
-						$OldLocation = $Location;
-						$OldTime = "";
-					}
-
-					if ($Time != $OldTime) {
-						if (@$DateList[$DateTimeLoc] OR @$_SESSION["SummaryAll"]) {
-							$DTBCount = +@$DateList[$DateTimeLoc . "Busy"];
-							$DTCount = +@$DateList[$DateTimeLoc . "Count"];
-							$DTRCount = +@$DateList[$DateTimeLoc . "ResCount"];
-							$DTOCount = $DTCount - $DTRCount;
-							$ClickToAdd = "onclick=\"Add_Appointment('" . $DateList[$DateTimeLoc] . "', '$Date', '$Time', '$ShowDate', '$ShowTime')\"";
-							$DClass = "apptOpen";
-
-							if ($ApptView == "ViewUser") {
-								if ($DTOCount) {
-									$title = "title=\"There " . isare($DTOCount) . " $DTOCount open appointment" . (($DTOCount == 1) ? '' : 's') . " available for this time period.\"";
-									$DXCount = $DTOCount;
-									$OpenSlots += $DTOCount;
-								}
-							}
-							else {  // $ApptView is "ViewSummary"
-								// Determine display class
-								if (+$DTRCount > 0) $DClass = "apptPartOpen"; // some reserved
-								if (+$DTRCount == $DTCount) $DClass = "apptWarn"; // all reserved
-								if ((+$DTCount == 0) OR (($Date < $TodayDate) AND (! @$_SESSION["SummaryAll"]))) {
-									$DClass = "apptFull";
-								}
-
-								$UseReservedAllowed = ($LocationSumRes[$LocationIndex] != "");
-								$CanUseReserved = ($MaxPermissions & $USE_RES);
-								$DoNotUseReserved = (($DClass == "apptWarn")
-									AND ((! $UseReservedAllowed) OR (! ($CanUseReserved))));
-								$DXCount = (($UseReservedAllowed) ? $DTCount : $DTOCount) + 0;
-								$DTHeader = "";
-								$DTTitle = "";
-								if ($DTOCount) $DTTitle = "$DTOCount open";
-								if ($DTRCount) $DTTitle .= (($DTTitle) ? "\n" : "") . "$DTRCount reserved";
-								if ($DTBCount) $DTTitle .= (($DTTitle) ? "\n" : "") . "$DTBCount assigned";
-
-								switch (true) {
-									case ($Date < $TodayDate):
-										$DClass .= " noSelect";
-										$DTHeader = "You cannot schedule appointments for an earlier date.\n";
-										$ClickToAdd = "";
-										break;
-									case (@$SitePermissions["S" . $Location] & $ADD_APP): // permission to add appt?
-										if ($DoNotUseReserved) {
-											$DClass .= " noSelect";
-											if ($DTRCount) {
-												$DTHeader = "$DTRCount remaining appointment";
-												$DTHeader .= (($DTRCount == 1) ? " is " : "s are ") . "reserved.";
-												if ($CanUseReserved) {
-													$DTHeader .= "\nYou must go to the date view to use reserved appointment times.\"";
-												}
-												else {
-													$DTHeader .= "\nYou do not have permission to use reserved slots.\"";
-												}
-												$DTOText = $DTRText = $DTBText = "";
-											}
-											$ClickToAdd = "";
-										}
-										$OpenSlots += $DTOCount;
-										break;
-									default:
-										$DClass .= " noSelect";
-										$DTHeader = "You do not have permission to schedule appointments at this site.\n";
-										$ClickToAdd = "";
-								}
-
-								$title = "title=\"$DTHeader" . (($DTHeader) ? "\n" : "") . $DTTitle . "\"";
-							}
-							if (! $InetLimited) {
-								echo "\t<div class='apptFloat $DClass' $ClickToAdd $title>$ShowTime ($DXCount)</div>\n";
-							}
-						}
-						else {
-							if ($ApptView == "ViewSummary") {
-								$fullclass = "apptFull";
-								$title = +@$DateList[$DateTimeLoc . 'Busy'] . " assigned";
-								echo "\t<div class='apptFloat $fullclass noSelect' title='$title'>$ShowTime</div>\n";
-							}
-							//else { // ViewUser
-							//	$title = "All appointments have been filled.";
-							//	$fullclass = "apptFull";
-							//}
-						}
-						$OldTime = $Time;
+			// Find an empty callback slot if this is a self-scheduled callback appointment
+			if ($UserHome == 0) {
+				// If site only allows sign-up for Callback list, just add a button to that effect
+				if (($Time == $NullTime) and ($Name == "") and (! $isDeleted)) {
+					$OpenSlotNumber = $Appt;
+					if (($Appt > 0) and $ThisSite["Index"] and ($ThisSite["Inet"] == "C") and (! $onCallback)) {
+						echo "</table>\n";
+						//echo "</center>\n";
+						echo "<div id='custCB'>\n";
+						echo "<br />The " . $ThisSite["Name"] . " needs to speak with you before scheduling an appointment.";
+						echo "<br />Please click on the following button to give us your contact information:";
+						echo "<br /><button id='custButton' onclick='Add_Appointment($Appt, \"$NullDate\", \"$NullTime\", \"$NullDate\", \"$NullTime\");'>Click to request a callback</button>\n";
+						echo "</div>\n";
+						return;
 					}
 				}
 			}
-		}
-		echo "</table>\n";
-		//echo "</center>\n";
 
-		switch (true) {
-			case (($UserHome == 0 ) and ($SingleSite == "")): // no location was checked
-				echo "<br /><div id='custCB'>\n";
-				echo "<br />Please select a site from the left hand column.";
-				echo "<br />&nbsp;</div>\n";
-				break;
-			case (($UserHome == 0) and (! $OpenSlots)):
-				echo "<div id='custCB'>\n";
-				echo "<br /><b>The " . $LocationName[$LocationLookup["S" . $SingleSite]] . " has no open appointments at this time.</b>";
-				if ($onCallback) {
-					echo "<br /><br />You are on the callback list should an opening become available,";
-					echo "<br />&nbsp;";
+			if ($Date != $NullDate) {
+				$ShowTime = Format_Time($Time, false);
+				$ShowDate = Format_Date($Date, true); // set $MON which is global
+				//error_log("DATE: $ShowDate at $ShowTime, $Date $Time"); /* DEBUG */
+
+				if ($Date != $OldDate) {
+					if ($MON != $OldMonth) {
+						if (! $NoTR) echo "</tr>\n"; // close the prior row but not on the first change
+						//if (! $InetLimited) echo "<tr>\n<td class='calMonth center'>$MON</td>\n<td>";
+						if (! $InetLimited) echo "<tr>\n<td class='calMonth center'>$MON</td>\n<td>";
+						$LTitle = $ThisSite["Name"];
+						$LTitle = Add_CB_Status($LTitle, $ThisSite);
+						if (! $InetLimited) echo "<div class='apptGroup apptGroupSummary'>" . $LTitle . "</div>\n";
+						$OldLocation = $Location;
+						$OldMonth = $MON;
+					}
+
+					$myclass = "";
+					$ApptAvail = $DateList[$Date] ?? 0;
+					if ($Date == $FirstSlotDate) {
+			    			$myclass = ($ApptAvail > 0) ? " apptOpen" : " apptFull noSelect";
+					}
+					if ($ApptView == "ViewSummary") {
+						echo "</td></tr>\n<tr>\n";
+						$clickop = "";
+						$myclass = "schedDateSummary";
+						if ($ThisSite["Permissions"] & $ADD_APP) {
+							$clickop = "onclick='New_Date(\"" . $Date . "\", 1)'";
+						}
+						else {
+							$myclass = "noSelect"; // hide pointer
+						}
+						echo "<td $clickop class='" . $myclass . "'>$ShowDate</td>\n<td>";
+					}
+					else { // $ApptView is "ViewUser"
+						// only show dates that have open appointments
+						if (! $InetLimited and (($DateList[$Date] ?? 0) > 0) and ($Date >= $FirstSlotDate)) {
+							echo "</td></tr>\n<tr class='schedDateUser'>\n";
+							echo "<td>$ShowDate</td>\n<td>";
+						}
+					}
+					$OldDate = $Date;
+					$OldTime = "";
 				}
-				else if ($LocationIsOpen[$LocationLookup["S" . $SingleSite]]) {
-					echo "<br /><br />If you would like to be placed on the callback list should an opening become available,";
-					echo " please click on the following button to give us your contact information:";
-					echo "<br /><button id='custButton' onclick='Add_Appointment($OpenSlotNumber, \"$NullDate\", \"$NullTime\", \"$NullDate\", \"$NullTime\");'>Click to request a callback</button>\n";
+
+				if ($Location != $OldLocation) {
+					$LTitle = $ThisSite["Name"];
+					$LTitle = Add_CB_Status($LTitle, $ThisSite);
+					echo "<div class='apptGroup apptGroupSummary'>" . $LTitle . "</div>\n";
+					$OldLocation = $Location;
+					$OldTime = "";
 				}
-				else echo "<br />&nbsp;";
-				echo "</div>\n";
-				break;
-			case (($UserHome == 0) and $InetLimited):
-				echo "<br /><div id='custCB'>\n";
-				echo "<br /><b>You will need to cancel a current appointment if you wish to make another.</b>";
-				if ($onCallback) {
-					echo "<br /><br />You are on the callback list. Someone should be contacting you shortly.";
-					echo "<br />&nbsp;";
-				}
-				else {
-					echo "<br /><br />If you need additional appointments, please request a callback.";
-					echo "<br />Click on the following button to give us your contact information:";
-					echo "<br /><button id='custButton' onclick='Add_Appointment($OpenSlotNumber, \"$NullDate\", \"$NullTime\", \"$NullDate\", \"$NullTime\");'>Click to request a callback</button>\n";
-				}
-				echo "</div>\n";
-				break;
-			case (($UserHome == 0) and ($OpenSlotNumber > 0)):
-				echo "<br /><div id='custCB'>\n";
-				if ($onCallback) {
-					echo "<br />You are on the callback list. Someone should be contacting you shortly.";
-					echo "<br />&nbsp;";
-				}
-				else {
-					echo "<br />If you are not sure you need an appointment and would like to speak to someone to help decide or answer a question,";
-					echo " please click on the following button to give us your contact information:";
-					echo "<br /><button id='custButton' onclick='Add_Appointment($OpenSlotNumber, \"$NullDate\", \"$NullTime\", \"$NullDate\", \"$NullTime\");'>Click to request a callback</button>\n";
-				}
-				echo "</div>\n";
-				break;
+
+				if ($Time != $OldTime) {
+					if (isset($DateList[$DateTimeLoc])) { // OR $_SESSION["SummaryAll"]) {
+						$DTOCount = $DateList[$DateTimeLoc . "OpenCount"] ?? 0; // (includes ResCount)
+						$DTBCount = $DateList[$DateTimeLoc . "Busy"] ?? 0;
+						$DTRCount = $DateList[$DateTimeLoc . "ResCount"] ?? 0;
+						$DTACount = $DTOCount - $DTRCount; // Available slots to all
+						$ClickToAdd = "onclick=\"Add_Appointment('" . $DateList[$DateTimeLoc] . "', '$Date', '$Time', '$ShowDate', '$ShowTime')\"";
+						$DClass = "apptOpen"; // ...until determined otherwise
+
+						if ($ApptView == "ViewUser") {
+							if ($DTACount) {
+								$title = "title=\"There " . isare($DTACount) . " $DTACount open appointment" . plural($DTACount) . " available for this time period.\"";
+								$OpenSlots += $DTACount;
+								$DTXCount = $DTACount; // No adjustment for reserved slots
+							}
+						}
+						else {  // $ApptView is "ViewSummary"
+
+							// Determine display class
+							switch (true) {
+							case (($DTOCount == 0) OR ($Date < $TodayDate));
+								$DClass = "apptFull"; break;
+							case ($DTRCount == $DTOCount): // all reserved
+							       	$DClass = "apptWarn"; break;
+							case ($DTRCount > 0): // some reserved
+							       	$DClass = "apptPartOpen"; break;
+							}
+
+							// Does site allow use of reserved slots from Summary view
+							$SiteReservedAllowed = ($ThisSite["SumRes"] != "");
+							// Does user have permission to use reserved slots
+							$CanUseReserved = ($ThisSite["Permissions"] & $USE_RES);
+							$OKtoUseReserved = $SiteReservedAllowed AND $CanUseReserved;
+
+							$DTXCount = (($OKtoUseReserved) ? $DTOCount : $DTACount) + 0;
+							$DTHeader = "";
+							$DTTitle = "";
+							if ($DTXCount) $DTTitle = "$DTXCount available";
+							if ($DTRCount) $DTTitle .= (($DTTitle) ? "\n" : "") . "$DTRCount reserved";
+							if ($DTBCount) $DTTitle .= (($DTTitle) ? "\n" : "") . "$DTBCount assigned";
+
+							switch (true) {
+								case ($Date < $TodayDate):
+									$DClass .= " noSelect";
+									$DTHeader = "You cannot schedule appointments for an earlier date.\n";
+									$ClickToAdd = "";
+									break;
+								case ($ThisSite["Permissions"] & $ADD_APP): // permission to add appt?
+									if ((! $DTACount) AND (! $OKtoUseReserved)) {
+										$DClass .= " noSelect";
+										if ($DTRCount) {
+											if ($CanUseReserved) {
+												$DTHeader .= "\nYou must go to the Daily View to use reserved appointment times.\"";
+											}
+											else {
+												$DTHeader .= "\nYou do not have permission to use reserved slots.\"";
+											}
+											$DTOText = $DTRText = $DTBText = "";
+										}
+										$ClickToAdd = "";
+									}
+									$OpenSlots += $DTACount;
+									break;
+								default:
+									$DClass .= " noSelect";
+									$DTHeader = "You do not have permission to schedule appointments at this site.\n";
+									$ClickToAdd = "";
+							}
+
+							$title = "title=\"$DTHeader" . (($DTHeader) ? "\n" : "") . $DTTitle . "\"";
+						}
+						if (! $InetLimited) {
+							echo "\t<div class='apptFloat $DClass' $ClickToAdd $title>$ShowTime ($DTXCount)</div>\n";
+						}
+					}
+					else {
+						if ($ApptView == "ViewSummary") {
+							$fullclass = "apptFull";
+							$title = ($DateList[$DateTimeLoc . 'Busy'] ?? 0) . " assigned";
+							echo "\t<div class='apptFloat $fullclass noSelect' title='$title'>$ShowTime</div>\n";
+						}
+						else { // ViewUser
+							$title = "All appointments have been filled.";
+							$fullclass = "apptFull";
+						}
+					}
+				$OldTime = $Time;
+			}
+		}
+	}
+	echo "</table>\n";
+
+	switch (true) {
+		case (($UserHome == 0 ) and ($InetLocationSelected == 0)): // no location was checked
+			echo "<br /><div id='custCB'>\n";
+			echo "<br />Please select a site from the left hand column.";
+			echo "<br />&nbsp;</div>\n";
+			break;
+
+		case (($UserHome == 0) and (! $OpenSlots)): // No available appointment slots
+			echo "<div id='custCB'>\n";
+			echo "<br /><b>The " . $ThisSite["Name"] . " has no open appointments at this time.</b>";
+
+			// Give an appropriate Callback list message
+			if ($onCallback) { // Already on the CB list
+				echo "<br /><br />You are on the callback list should an opening become available,";
+				echo "<br />&nbsp;";
+			}
+			else if ($ThisSite["Inet"] == "N") { // Not allowed to add self to CB list
+				echo "<br /><br />If you would like to be placed on the callback list should an opening become available,";
+				echo " please refer to the instructions above.";
+				echo "<br />&nbsp;";
+			}
+			else if ($ThisSite["IsOpen"] == "T") { // Allow to add if the site is still open
+				echo "<br /><br />If you would like to be placed on the callback list should an opening become available,";
+				echo " please click on the following button to give us your contact information:";
+				echo "<br /><button id='custButton' onclick='Add_Appointment($OpenSlotNumber, \"$NullDate\", \"$NullTime\", \"$NullDate\", \"$NullTime\");'>Click to request a callback</button>\n";
+			}
+			else echo "<br />&nbsp;"; // Site is closed, cannot add to CB listj
+
+			echo "</div>\n";
+			break;
+
+		case (($UserHome == 0) and $InetLimited): // Slots are available but already have the max number allowed
+			echo "<br /><div id='custCB'>\n";
+			echo "<br /><b>You will need to cancel a current appointment if you wish to make another.</b>";
+			if ($onCallback) {
+				echo "<br /><br />You are on the callback list. Someone should be contacting you shortly.";
+				echo "<br />&nbsp;";
+			}
+			else if ($ThisSite["Inet"] == "N") { // Not allowed to add self to CB list
+				echo "<br /><br />If you need additional appointments or assistance,";
+				echo " please refer to the instructions above.";
+				echo "<br />&nbsp;";
+			}
+			else {
+				echo "<br /><br />If you need additional appointments, please request a callback.";
+				echo "<br />Click on the following button to give us your contact information:";
+				echo "<br /><button id='custButton' onclick='Add_Appointment($OpenSlotNumber, \"$NullDate\", \"$NullTime\", \"$NullDate\", \"$NullTime\");'>Click to request a callback</button>\n";
+			}
+			echo "</div>\n";
+			break;
+
+		case (($UserHome == 0) and ($OpenSlotNumber > 0)):
+			if ($ThisSite["Inet"] == "N") break; // Not allowed to add self to CB list
+			echo "<br /><div id='custCB'>\n";
+
+			// Give appropriate callback list message
+			if ($onCallback) {
+				echo "<br />You are on the callback list. Someone should be contacting you shortly.";
+				echo "<br />&nbsp;";
+			}
+			else {
+				echo "<br />If you are not sure you need an appointment and would like to speak to someone to help decide or answer a question,";
+				echo " please click on the following button to give us your contact information:";
+				echo "<br /><button id='custButton' onclick='Add_Appointment($OpenSlotNumber, \"$NullDate\", \"$NullTime\", \"$NullDate\", \"$NullTime\");'>Click to request a callback</button>\n";
+			}
+			echo "</div>\n";
+			break;
 		}
 
-		echo "</div>";
+	echo "</div>";
 	} // End of type summary/user views
 
-	$appointments = []; // release memory
+unset($appointments); // release memory
 }
 
 //===========================================================================================
-function List_Group() {
+function List_Group($Location) {
 // Sorts daily view output by named, blank, then RESERVED slots
-//$ApptGroupItem = array($GroupType, $Appt, $SlotNumber, $SlotIndex, $myclass, $Name, $Phone, $Tags, $Need, $Info, $Status);
+//$ApptGroupItem = array($GroupType, $Appt, $SlotNumber, $SlotIndex, $myclass, $Name, $Phone, $Tags, $Need, $Info, $Status, $Location);
 //===========================================================================================
 	global $ApptGroupList, $ApptGroupListIndex;
+	//error_log("LGL: List_Group for Location $Location -----------------------------"); /* DEBUG */
 	
 	$SlotIndex = 0;
 	for ($AGLType = 1 ; $AGLType < 4 ; $AGLType++) {
@@ -821,7 +906,7 @@ function List_Group() {
 			$ApptGroupItem = $ApptGroupList[$AGLI];
 			if ($ApptGroupItem[0] == $AGLType) {
 				$SlotIndex++;
-				List_Slot($ApptGroupItem[1], $ApptGroupItem[2], $SlotIndex, $ApptGroupItem[4], $ApptGroupItem[5], $ApptGroupItem[6], $ApptGroupItem[7], $ApptGroupItem[8], $ApptGroupItem[9], $ApptGroupItem[10]);
+				List_Slot($ApptGroupItem[1], $ApptGroupItem[2], $SlotIndex, $ApptGroupItem[4], $ApptGroupItem[5], $ApptGroupItem[6], $ApptGroupItem[7], $ApptGroupItem[8], $ApptGroupItem[9], $ApptGroupItem[10], $ApptGroupItem[11]);
 			}
 		}
 	}
@@ -829,12 +914,19 @@ function List_Group() {
 }
 
 //===========================================================================================
-function List_Slot($SaveAppt, $SlotNumber, $SlotIndex, $myclass, $Name="", $Phone="", $Tags="", $Need="", $Info="", $Status="") {
+function List_Slot($SaveAppt, $SlotNumber, $SlotIndex, $myclass, $Name="", $Phone="", $Tags="", $Need="", $Info="", $Status="", $Location="") {
 //===========================================================================================
 	global $Debug, $Errormessage;
-	global $MaxPermissions, $ApptView, $ADD_CB, $ADD_APP, $USE_RES;
+	global $Warning_icon, $CheckedBox_icon, $Appt_icon;
+	global $VIEW_APP, $VIEW_CB;
+	global $ApptView, $ADD_CB, $ADD_APP, $USE_RES;
 	global $FormApptNo, $FormApptOldNo;
 	global $RESERVED;
+	global $Site;
+	global $InfoMatch;
+
+	$ThisSite = $Site["S" . $Location];
+	//error_log("LSLOT: List_Slot $SaveAppt, Location=$Location, Slot=$SlotNumber:$SlotIndex, $Name"); /* DEBUG */
 
 	// display only the most recent status note
 	$Status = _Show_Chars($Status, "text");
@@ -848,7 +940,7 @@ function List_Slot($SaveAppt, $SlotNumber, $SlotIndex, $myclass, $Name="", $Phon
 		$NeedTitle =  _Show_Chars(str_replace("%0A", ", ", $Need), "text"); // replace newlines with a comma
 		$NeedTitle = str_replace("'", "`", $NeedTitle); // replace apostrophe with back-apos
 		$NeedTitle = "title='" . $NeedTitle . "'";
-		$needmark = "&#x2611;"; // checkbox symbol
+		$needmark = $CheckedBox_icon;
 	}
 
 	// display the info as a title and add an info mark
@@ -858,8 +950,10 @@ function List_Slot($SaveAppt, $SlotNumber, $SlotIndex, $myclass, $Name="", $Phon
 		$InfoTitle =  _Show_Chars(str_replace("%0A", ", ", $Info), "text"); // replace newlines with a comma
 		$InfoTitle = str_replace("'", "`", $InfoTitle); // replace apostrophe with back-apos
 		$InfoTitle = "title='" . $InfoTitle . "'";
-		$infomark = "&#x26a0;"; // warning symbol
+		$infomark = $Warning_icon;
+	
 	}
+	if ($InfoMatch) $infomark .= " " . $Appt_icon;
 
 	// get rid of special character coding
 	$Name = _Show_Chars($Name, "text");
@@ -867,92 +961,138 @@ function List_Slot($SaveAppt, $SlotNumber, $SlotIndex, $myclass, $Name="", $Phon
 
 	// determine classes for display
 	$slotclass = "";
-	if ((($FormApptOldNo > 0) and ($FormApptNo == $SaveAppt))
-		or (($FormApptOldNo == $SaveAppt) and ($FormApptNo == "NewDate"))) {
+	if (($FormApptNo == $SaveAppt) or ($FormApptOldNo == $SaveAppt)) { // v 8.03
 		$slotclass = "apptSlotMoved";
-		}
-	$selfclass = strpos($FirstStatus, '(USER)') ? "user_class" : "";
-	if ($selfclass == "") $selfclass = strpos($Status, '(USER.)') ? "userOK_class" : "";
+	}
+	$inetclass = strpos($FirstStatus, '(USER)') ? "user_class" : "";
+	if ($inetclass == "") $inetclass = strpos($Status, '(USER.)') ? "userOK_class" : "" ;
 
 	// test if the user can assign slots
-	$canUseRes = ($MaxPermissions & $USE_RES);
-	$testres = ($Name == $RESERVED) ? ($MaxPermissions & $USE_RES) : true;
-	$titleres = ($testres) ? "" : "You do not have permission to assign a reserved appointment.";
-	$rowclass = ($testres) ? "" : "class=\"noSelect\"";
-	$addTags = ($addTags) ? " <b>[$addTags]</b>" : "";
+	$CanUseReserved = ($ThisSite["Permissions"] & $USE_RES);
+	$CanChangeAppt = ($ThisSite["Permissions"] & $ADD_APP);
+	$CanAddCallback = ($ThisSite["Permissions"] & $ADD_CB);
+	$CanViewAppt = ($ThisSite["Permissions"] & $VIEW_APP);
+	$CanViewCB = ($ThisSite["Permissions"] & $VIEW_CB);
 	
-	if ((($MaxPermissions & $ADD_APP) AND $testres) 
-	OR (($ApptView == "ViewCallback") AND ($MaxPermissions & $ADD_CB))) {
-		echo "<tr onclick='Change_Appointment(1, $SaveAppt, $SlotNumber, $SlotIndex);'>\n";
+	if ($Name == $RESERVED) {
+		$titleNot = ($CanUseReserved) ? "" : "You do not have permission to assign a reserved appointment at this site." ;
+		$CanView = $CanViewAppt;
 	}
-	else {
-		echo "<tr $rowclass title='$titleres'>\n";
+	else if ($ApptView == "ViewCallback") { // Callback slot
+		$titleNot = ($CanAddCallback) ? "" : "You do not have permission to add or change a callback record at this site." ;
+		$CanView = $CanViewCB;
 	}
-	echo "\t<td class='apptSlot $slotclass'>&nbsp;$SlotIndex&nbsp;&nbsp;</td>\n";
-	echo "\t<td id='apptName$SlotNumber' class='apptName $myclass'>";
-	if ($ApptView == "ViewDaily") { // add the reserved icon in the name column
-		$nameBlank = ($Name == "");
-		$nameReserved = ($Name == $RESERVED);
-		if (! $nameReserved) $Name = _Show_Chars($Name, "html");
-
-		switch (true) {
-			case ($nameBlank AND $canUseRes): // add the icon
-				echo "<div class='apptNameDiv'><div class='apptNameRes' title='Reserve this slot' onclick='Change_Appointment(-1, $SaveAppt, $SlotNumber, $SlotIndex);'>R</div></div>";
-
-				break;
-			case ($nameReserved AND $canUseRes): // add RESERVED and the icon
-				echo "<div class='apptNameDiv'><div class='apptReserved'>$Name</div>
-					<div class='apptNameUnres'>R</div>
-					<div class='apptNameUnresNot'
-						title='Unreserve this slot'
-						onclick='Change_Appointment(-1, $SaveAppt, $SlotNumber, $SlotIndex);'>
-						<b>/</b></div>
-					</div>";
-				break;
-			case ($nameReserved): // add RESERVED but no icon
-				echo "<div class='apptNameDiv noSelect'><div class='apptReserved'>$Name</div></div>";
-				break;
-			default: // add the name and no icon
-				echo ($Name . $addTags);
+	else { // Empty or assigned slot
+		$titleNot = ($CanChangeAppt) ? "" : "You do not have permission to add or change an appointment at this site." ;
+		$CanView = $CanViewAppt;
+	}
+	if ($CanView) {
+		$addTags = ($addTags) ? " <b>[$addTags]</b>" : "";
+	
+		if ($titleNot) { // block the link
+			echo "<tr class='noSelect' title='$titleNot'>\n";
 		}
-		echo "</td>\n";
+		else { // all good
+			echo "<tr onclick='Change_Appointment(1, $SaveAppt, $SlotNumber, $SlotIndex);'>\n";
+		}
+
+		echo "\t<td class='apptSlot $slotclass'>&nbsp;$SlotIndex&nbsp;&nbsp;</td>\n";
+		echo "\t<td id='apptName$SlotNumber' class='apptName $myclass'>";
+		if ($ApptView == "ViewDaily") { // add the reserved icon in the name column
+			$nameBlank = ($Name == "");
+			$nameReserved = ($Name == $RESERVED);
+			if (! $nameReserved) $Name = _Show_Chars($Name, "html");
+			switch (true) {
+				case ($nameBlank AND $CanUseReserved): // add the icon
+					echo "<div class='apptNameDiv'><div class='apptNameRes' title='Reserve this slot' onclick='Change_Appointment(-1, $SaveAppt, $SlotNumber, $SlotIndex);'>R</div></div>";
+
+					break;
+				case ($nameReserved AND $CanUseReserved): // add RESERVED and the icon
+					echo "<div class='apptNameDiv'><div class='apptReserved'>$Name</div>
+						<div class='apptNameUnres'>R</div>
+						<div class='apptNameUnresNot'
+							title='Unreserve this slot'
+							onclick='Change_Appointment(-1, $SaveAppt, $SlotNumber, $SlotIndex);'>
+							<b>/</b></div>
+						</div>";
+					break;
+				case ($nameReserved): // add RESERVED but no icon
+					echo "<div class='apptNameDiv noSelect'><div class='apptReserved'>$Name</div></div>";
+					break;
+				default: // add the name and no icon
+					echo ($Name . $addTags);
+			}
+			echo "</td>\n";
+		}
+		else echo ($Name . $addTags . "</td>\n");
+		echo "\t<td id='apptPhone$SlotNumber' class='apptPhone $myclass'>$Phone</td>\n";
+		echo "\t<td id='apptNeed$SlotNumber' class='apptNeed $myclass' $NeedTitle>$needmark</td>\n";
+		echo "\t<td id='apptInfo$SlotNumber' class='apptNeed $myclass' $InfoTitle>$infomark</td>\n";
+		echo "\t<td id='apptStatus$SlotNumber' class='apptStatus $inetclass $myclass' title='$FirstStatus'>$FirstStatus</td></tr>\n";
 	}
-	else echo ($Name . $addTags . "</td>\n");
-	echo "\t<td id='apptPhone$SlotNumber' class='apptPhone $myclass'>$Phone</td>\n";
-	echo "\t<td id='apptNeed$SlotNumber' class='apptNeed $myclass' $NeedTitle>$needmark</td>\n";
-	echo "\t<td id='apptInfo$SlotNumber' class='apptNeed $myclass' $InfoTitle>$infomark</td>\n";
-	echo "\t<td id='apptStatus$SlotNumber' class='apptStatus $myclass $selfclass' title='$FirstStatus'>$FirstStatus</td></tr>\n";
+}
+
+//===========================================================================================
+function Add_CB_Status($LTitle, $ThisSite) {
+// Addes the callback list status onto the given appointment list title line
+//===========================================================================================
+	global $Debug, $Errormessage;
+	global $Site, $ApptView;
+	
+	if ($ApptView != "ViewUser") {
+		$LColor = ($ThisSite["BusyCBCount"] AND ($ThisSite["AvailCount"] <= $ThisSite["AvailCBCount"])) ? "yellow" : "transparent";
+		$LTitle .= "<span style='position: absolute; right: 0.5em; background-color: $LColor;'>";
+		$LTitle .= "(" . $ThisSite["BusyCBCount"] . " on Callback list)</span>";
+		}
+	return ($LTitle);
 }
 
 //===========================================================================================
 function Add_Shortcodes($Loc, $message) {
 // Adds shortcodes to message
 //===========================================================================================
-	global $Name, $Time, $Date, $LocationName, $LocationAddress, $LocationContact;
-	global $LocationAttachHTML;
+	global $Site, $Name, $Time, $Date;
 	global $SystemAttachList;
-	$SiteAddress = explode("|", $LocationAddress[$Loc]);
+	//NFG$SiteAddress = explode("|", $LocationAddress[$Loc]);
 	$message = _Show_Chars($message, "html");
+	$ThisSite = $Site["S" . $Loc];
+	$lahtml = "";
+
+	// Make the replacement for [ATTACHMENTS] shortcode
+	if ($ThisSite["Attachments"]) {
+		$breakhtml = "";
+		$lahtml = "<ul class=\"attachlist\">";
+		for ($lax = 0; $lax < sizeof($SystemAttachList)-1; $lax++) {
+			$sap = explode("=", $SystemAttachList[$lax]);
+			if (strpos($ThisSite["Attachments"], $sap[0]) !== false) {
+				$saplink = "<a target=\"_blank\" href=\"$sap[1]\">$sap[1]</a>";
+				$lahtml .= "$breakhtml<li> - $sap[0] ($saplink)";
+				$breakhtml = "</li>";
+			}
+		}
+		$lahtml .= "</li></ul>";
+	}
 
 	// [TPNAME], [DATE] and [TIME] are not supported for this message.
 	$message = str_replace("[TPNAME]",      "", $message);
 	$message = str_replace("[DATE]",        "", $message);
 	$message = str_replace("[TIME]",        "", $message);
-	$message = str_replace("[SITENAME]",    $LocationName[$Loc], $message);
-	$message = str_replace("[ADDRESS]",     $SiteAddress[0], $message);
-	$message = str_replace("[CITY]",        $SiteAddress[1], $message);
-	$message = str_replace("[STATE]", 	$SiteAddress[2], $message);
-	$message = str_replace("[ZIP]",         $SiteAddress[3], $message);
-	$message = str_replace("[PHONE]", 	$SiteAddress[4], $message);
-	$message = str_replace("[EMAIL]",       $SiteAddress[5], $message);
-	$message = str_replace("[WEBSITE]",     $SiteAddress[6], $message);
+	$message = str_replace("[SITENAME]",    $ThisSite["Name"], $message);
+	$message = str_replace("[ADDRESS]",     $ThisSite["Address"], $message);
+	$message = str_replace("[CITY]",        $ThisSite["City"], $message);
+	$message = str_replace("[STATE]", 	$ThisSite["State"], $message);
+	$message = str_replace("[ZIP]",         $ThisSite["Zip"], $message);
+	$message = str_replace("[PHONE]", 	$ThisSite["Phone"], $message);
+	$message = str_replace("[EMAIL]",       $ThisSite["Email"], $message);
+	$message = str_replace("[WEBSITE]",     $ThisSite["Website"], $message);
 	$message = str_replace("[STATESITE]",   $_SESSION["SystemURL"], $message);
-	$message = str_replace("[CONTACT]",     $LocationContact[$Loc], $message);
-	$message = str_replace("[ATTACHMENTS]", $LocationAttachHTML[$Loc], $message);
+	$message = str_replace("[CONTACT]",     $ThisSite["Contact"], $message);
+	$message = str_replace("[ATTACHMENTS]", $lahtml, $message);
+	// For individual attachment shortcodes...
 	for ($lax = 0; $lax < sizeof($SystemAttachList)-1; $lax++) {
 		$sap = explode("=", $SystemAttachList[$lax]);
 		$testShortcode = "[$sap[0]]";
-		$replacement = "<a href=\"$sap[1]\">$sap[0] ($sap[1])</a>";
+		$replacement = "<a target=\"_blank\" href=\"$sap[1]\">$sap[0] ($sap[1])</a>";
 		$message = str_replace($testShortcode, $replacement, $message);
 	}	
 	return $message;

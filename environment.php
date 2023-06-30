@@ -117,18 +117,7 @@ if (isset($_SESSION["UserOptions"]) and ($_SESSION["UserOptions"] == "A")) {
 // SystemAttach
 // TRACE
 // SummaryAll
-// UserIndex
-// UserEmail
-// UserFirst
-// UserFullName
-// UserHome
-// UserLast
-// UserLoc
-// UserName
-// UserOptions
-// UserPass
-// UserPhone
-// UserData
+// User (array - all user record items except password)
 // UserSiteList
 // MaxWaitSequence
 ?>

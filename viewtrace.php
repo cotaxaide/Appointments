@@ -1,4 +1,8 @@
 <?PHP
+//Version 9.0
+//	Changes due to user SESSION consolidation
+//Version 8.04a
+//	Some reformatting
 //Version 5.02b
 //	Absorb duplicates
 //Version 5.02a
@@ -9,7 +13,7 @@ require "environment.php";
 
 $Errormessage = "";
 // If the UserIndex has not been set as a session variable, the user needs to sign in
-if (@$_SESSION["UserIndex"] == 0) {
+if (! isset($_SESSION["User"])) {
 	header('Location: index.php'); // prevents direct access to this page (must sign in first).
 	exit;
 }
@@ -33,7 +37,7 @@ function logfile_print() {
 	$user_email = [];
 	$user_count = [];
 	$logfile = fopen("appt_error_log", "r") or die("Unable to open file!");
-	while (!feof($logfile) /* AND ($getanother < 500) */ ) {
+	while (! feof($logfile) /* AND ($getanother < 500) */ ) {
 		$event_entry = fgets($logfile);
 		if (! $event_entry) continue;
 		if (trim($event_entry) == "") continue;
@@ -43,7 +47,6 @@ function logfile_print() {
 			continue;
 		}
 		else {
-			//echo "[" . $last_entry_count-1 . " dups]";
 			$last_entry_count = 0;
 			$last_entry = $event_entry;
 		}
@@ -72,11 +75,13 @@ function logfile_print() {
 
 			// Start today's box
 			$old_date = $event_timestamp[0];
-			echo "\n\n<div class='trace_daybox'><div>$old_date</div>";
+			echo "\n\n<div class='trace_daybox' title='$old_date' onclick=\"Top$old_date.focus();\">";
+			echo "\n<div id=\"Top$old_date\">$old_date</div>";
 
 			// Clear yesterday's data
 			$user_record = [];
 			$user_count = [];
+			$user_inet = [];
 		}
 
 		// Parse the new record
@@ -91,26 +96,29 @@ function logfile_print() {
 		$event_module = substr($event, 1, $colon_location - 1);
 		$comma_location = strpos($event, ",");
 		$event_user = trim(substr($event, $colon_location + 1, $comma_location - $colon_location - 1));
+		if ($event_user == "SYSTEM") $event_user = "_SYSTEM_";
 		$event_data = trim(substr($event, $comma_location + 1));
+		if (! isset($user_count[$event_user])) $user_count[$event_user] = 0;
 		//echo "\n<br />$event($event_module, $event_user, $event_data)"; // for debugging
 
 		// Add the event to the user record
 		switch ($event_module) {
 		case "INDEX":
-			if (strstr($event_data, "Login")) { 
-				break;
-			}
+			// Show raw event
+			//echo "\n<div class='userbox'>$event_timestamp[1] on $event_timestamp[0]";
+			//echo "\n<br />$event_module<br />$event_user<br />$event_data</div>";
+			if (strstr($event_data, "Login")) break;
 			if (strstr($event_data, "using email")) {
-				// Show raw event
-				//echo "\n<div class='userbox'>$event_timestamp[1] on $event_timestamp[0]";
-				//echo "\n<br />$event_module<br />$event_user<br />$event_data</div>";
 				$email = substr($event_data, 12);
 				$user_email[$email] = $event_user;
 				$user_email[$event_user] = $email;
-				$user_count[$event_user] = @$user_count[$event_user] + 1;
+				break;
+			}
+			if (strstr($event_data, "logged in")) {
+				$user_count[$event_user] = $user_count[$event_user] + 1;
 				if (array_key_exists($event_user, $user_record)) {
 					//show_box("userbox", $event_user, $user_record[$event_user]);
-					$user_record[$event_user . " (" . $user_count[$event_user] . ")"] = "\n<br />$event_timestamp[1]: [I] " . $user_record[$event_user];
+					//$user_record[$event_user . " (" . $user_count[$event_user] . ")"] = "\n<br />$event_timestamp[1]: [I] " . $user_record[$event_user];
 					$user_email[$event_user . " (" . $user_count[$event_user] . ")"] = $user_email[$event_user];
 				}
 				$user_record[$event_user] = "";
@@ -119,6 +127,10 @@ function logfile_print() {
 			@$user_record[$event_user] .= "\n<br />$event_timestamp[1]: [I] $event_data";
 			break;
 		case "APPT":
+			if (strstr($event_data, "ViewUser")) {
+				$user_inet[$email] = true;
+				$user_inet[$event_user] = true;
+			}
 			@$user_record[$event_user] .= "\n<br />$event_timestamp[1]: [A] $event_data";
 			break;
 		case "EXPORT":
@@ -135,7 +147,7 @@ function logfile_print() {
 			break;
 		case "REMIND";
 			if (strstr($event_data, "reminders ran")) $event_data = "Reminders ran";
-			@$user_record["SYSTEM"] .= "\n<br />$event_timestamp[1]: $event_data";
+			@$user_record["_SYSTEM_"] .= "\n<br />$event_timestamp[1]: $event_data";
 			break;
 		case "PHP Fatal error":
 			echo "\n<div class='errorbox'>@$event_timestamp[1]: $event";
@@ -161,10 +173,13 @@ function show_all() {
 	global $user_record;
 	asort($user_record);
 	foreach ($user_record as $j => $e) {
-		if ($j == "SYSTEM") {
+		if ($j == "_SYSTEM_") {
 			$class = 'trace_systembox';
 		}
 		else if (strstr($e, "[A]") AND strstr($e, "=ViewUser")) {
+			$class = 'trace_inetbox';
+		}
+		else if (strstr($e, "[I]") AND strstr($e, "NewUser")) {
 			$class = 'trace_inetbox';
 		}
 		else {
@@ -209,7 +224,7 @@ function show_box($c, $j, $e) {
 <div id="Main">
 	<div class="page_header">
 		<h1>Tax-Aide Appointments Error Log</h1>
-		<?php echo "You are signed in as " . str_replace("!", "&apos;", $_SESSION["UserFullName"]) . "\n"; ?>
+		<?php echo "You are signed in as " . str_replace("!", "&apos;", $_SESSION["User"]["user_full_name"]) . "\n"; ?>
 	</div>
 </div>
 

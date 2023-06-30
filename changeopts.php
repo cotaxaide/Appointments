@@ -3,6 +3,8 @@
 // This is an AJAX file used to update user options
 
 // ---------------------------- VERSION HISTORY -------------------------------
+//File Version 9.00
+//	Change to SESSION user variables
 //File Version 5.01
 //	Change to administrator error message that appeared when at user home site
 
@@ -10,7 +12,7 @@
 require "environment.php";
 
 // If the UserIndex has not been set as a session variable, the user needs to log in
-if (! ($_SESSION["UserIndex"] > 0)) {
+if (! ($_SESSION["User"]["user_index"] > 0)) {
 	header('Location: index.php');
 }
 
@@ -20,7 +22,7 @@ $usite = $q[0];
 $uid = $q[1];
 $useroptions = $q[2];
 $SiteCurrent = $_SESSION["SiteCurrent"];
-if ($_SESSION["TRACE"]) error_log("CHGOPT: " . $_SESSION["UserName"] . ", Site=" . $SiteCurrent . ", Usite=" . $usite . ", Uid=" . $uid . ", Uopt=" . $useroptions);
+if ($_SESSION["TRACE"]) error_log("CHGOPT: " . $_SESSION["User"]["user_name"] . ", Site=" . $SiteCurrent . ", Usite=" . $usite . ", Uid=" . $uid . ", Uopt=" . $useroptions);
 
 // echo "curr=($SiteCurrent)\nuid=($uid)\nusite=($usite)\nuseroptions=($useroptions)\n\n"; // DEBUG
 

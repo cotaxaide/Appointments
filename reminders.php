@@ -1,4 +1,6 @@
 <?PHP
+//Version 8.02
+//	Reminders repeatedly sending after every "lastrem" days
 //Version 8.01
 //	Added year to reminder timestamp (system_reminders)
 //	Added attachments imbedded in email text message
@@ -29,17 +31,12 @@ while($row = mysqli_fetch_array($sites)) {
 	$siteIndex = "S" . $row["site_index"];
 	$siteName[$siteIndex] = $row["site_name"]; 
 	$siteContact[$siteIndex] = $row["site_contact"]; 
+	$siteReminder[$siteIndex] = $row["site_reminder"];
+	$siteLastRem[$siteIndex] = $row["site_lastrem"];
 
 	$msg = $row["site_message"]; 
 	if (substr($msg, 0, 4) == "NONE") $msg = "";
 	$siteMessage[$siteIndex] = $msg;
-
-	$days = $row["site_reminder"];
-	$sd = "";
-	if ($days == "") $days = 0;
-	$sd = strtotime("+" . $row["site_reminder"] . " days", time());
-	$siteReminder[$siteIndex] = $sd;
-	$siteLastRem[$siteIndex] = intval($row["site_lastrem"]) + 1;
 
 	$sa = $row["site_address"]; 
 	$sa = explode("|", $row["site_address"]);
@@ -77,17 +74,25 @@ while($row = mysqli_fetch_array($appointments)) {
 	if ($apptEmail == "") continue; // no email to send to
 	$apptDate = $row["appt_date"];
 	if ($apptDate == $NullDate) continue; // on callback or deleted list
-	if ($apptDate < $TodayDate) continue; // skip if earlier than today
-	$apptDate = strtotime($apptDate);
+	if ($apptDate < $TodayDate) continue; // skip if appt is earlier than today
 
 	// See if the site is set up to send the email
 	$siteIndex = "S" . $row["appt_location"];
 	if ($siteMessage[$siteIndex] == "") continue; // site messaging not enabled
-	if ($siteReminder[$siteIndex] == "") continue; // site reminder not enabled
-	if ($apptDate < $siteReminder[$siteIndex]) continue; // not time to send yet
+	if ($siteReminder[$siteIndex] == 0) continue; // site reminder not enabled
+
+	// See if it's time to send the email
+	$apptDate = strtotime($apptDate);
+	$apptReminder = date("Y-m-d", strtotime("-" . $siteReminder[$siteIndex] . " days", $apptDate));
 	$apptSent = strtotime($row["appt_emailsent"]);
-	$graceDate = strtotime("-" . $siteLastRem[$siteIndex] . " days");
-	if ($apptSent > $graceDate) continue; // already sent recently
+	$apptDelay = date("Y-m-d", strtotime("+" . $siteLastRem[$siteIndex] . " days", $apptSent));
+//	if ($_SESSION['TRACE']) { // DEBUG
+//		$aD = date("Y-m-d", $apptDate);
+//		$aS = date("Y-m-d", $apptSent);
+//		error_log("REMIND: SYSTEM, Email to $apptEmail, today=$TodayDate, apptDate=$aD, apptSent=$aS, reminder=$apptReminder, apptDelay=$apptDelay");
+//	}
+	if ($TodayDate < $apptReminder) continue; // not time to send yet
+	if ($TodayDate < $apptDelay) continue; // already sent recently
 
 	// OK to send email
 	$apptStatus = $row["appt_status"];

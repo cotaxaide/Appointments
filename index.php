@@ -1,4 +1,9 @@
 <?php
+// Version 9.00
+// 	Changed temporary PW from character string to 6-digit verification code
+// 	Changed user SESSION variables to be all in one array
+// Version 8.03
+//	Added ExcelExport to User database table (vs cookie)
 // Version 8.01
 // 	Better checking and error handling of new user sign-up input fields
 // Version 7.01
@@ -26,20 +31,22 @@ $_SESSION["DEBUG"] = $DEBUG = false;
 $Errormessage = "";
 $Usermessage = "";
 $LocationList = [];
-$LocationList[0] = 0;
 $LocationInternet = [];
 $FormLoginEmail = "";
-$UserIdentified = (isset($_SESSION["UserIndex"]) AND ($_SESSION["UserIndex"] > 0));
-$UserIndex = $UserIdentified ? $_SESSION["UserIndex"] : "";
-$UserName = $UserIdentified ? $_SESSION["UserName"] : "";
-$UserFirst = $UserIdentified ? $_SESSION["UserFirst"] : "";
-$UserLast = $UserIdentified ? $_SESSION["UserLast"] : "";
-$UserEmail = $UserIdentified ? $_SESSION["UserEmail"] : "";
-$UserPhone = $UserIdentified ? $_SESSION["UserPhone"] : "";
-$UserHome = $UserIdentified ? $_SESSION["UserHome"] : "";
-$UserOptions = $UserIdentified ? $_SESSION["UserOptions"] : "";
-$UserSiteList = $UserIdentified ? $_SESSION["UserSiteList"] : "";
+$UserIdentified = (isset($_SESSION["User"]) AND ($_SESSION["User"]["user_index"] > 0));
+$UserIndex = $UserIdentified ? $_SESSION["User"]["user_index"] : "";
+$UserName = $UserIdentified ? $_SESSION["User"]["user_name"] : "";
+$UserFirst = $UserIdentified ? $_SESSION["User"]["user_first"] : "";
+$UserLast = $UserIdentified ? $_SESSION["User"]["user_last"] : "";
+$UserEmail = $UserIdentified ? $_SESSION["User"]["user_email"] : "";
+$UserPhone = $UserIdentified ? $_SESSION["User"]["user_phone"] : "";
+$UserHome = $UserIdentified ? $_SESSION["User"]["user_home"] : "";
+$UserOptions = $UserIdentified ? $_SESSION["User"]["user_options"] : "";
+$UserSiteShow = $UserIdentified ? $_SESSION["User"]["user_sitelist"] : "";
+$UserExcelExport = $UserIdentified ? $_SESSION["User"]["user_excel_export"] : "";
 $UserPass = "";
+$UserPassPart = [];
+$Dagger = chr(134);
 $Alert = "";
 $gotophp = "index.php";
 $isAdministrator = ($UserOptions == "A") ? true : false;
@@ -66,6 +73,7 @@ while ($row = mysqli_fetch_array($sys)) {
 
 // Get a list of locations which are accepting on-line appointments
 $j = 0;
+$LocationList[0] = 0;
 $query = "SELECT * FROM $SITE_TABLE";
 $query .= " WHERE `site_inet` <> ''";
 $query .= " ORDER BY `site_name`";
@@ -112,16 +120,16 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 		case "NewUser":
 		case "Login":
 		case "GetPW":
-			$_SESSION["UserIndex"] = 0;
+			$_SESSION["User"]["user_index"] = 0;
 			$UserIndex = 0;
 			break;
 		default:
 	}
 
 	// Process request
-	if (@$_SESSION["UserIndex"] > 0) { // i.e. Already logged in
-		$UserIndex = $_SESSION["UserIndex"];
-		$UserOptions = $_SESSION["UserOptions"];
+	if ($_SESSION["User"]["user_index"] > 0) { // i.e. Already logged in
+		$UserIndex = $_SESSION["User"]["user_index"];
+		$UserOptions = $_SESSION["User"]["user_options"];
 
 		switch ($FormLoginAction) {
 
@@ -142,12 +150,12 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 					$query .= " WHERE `user_index` = '$UserIndex'";
 					mysqli_query($dbcon, $query);
 
-					$idoemail = $_SESSION["UserEmail"];
+					$idoemail = $_SESSION["User"]["user_email"];
 					$query = "UPDATE `$APPT_TABLE`";
 					$query .= " SET `appt_email` = '$FormLoginEmail'";
 					$query .= " WHERE `appt_email` = '$idoemail'";
 					mysqli_query($dbcon, $query);
-					$_SESSION["UserEmail"] = $FormLoginEmail;
+					$_SESSION["User"]["user_email"] = $FormLoginEmail;
 					$Usermessage .= "Your email has been changed as requested <br />from $idoemail <br />to $FormLoginEmail.";
 					break;
 				}
@@ -158,14 +166,14 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 				$query .= " SET `user_phone` = '$FormLoginPhone'";
 				$query .= " WHERE `user_index` = '$UserIndex'";
 				mysqli_query($dbcon, $query);
-				$idophone = $_SESSION["UserPhone"];
+				$idophone = $_SESSION["User"]["user_phone"];
 				if ($idophone != "") {
 					$query = "UPDATE `$APPT_TABLE`";
 					$query .= " SET `appt_phone` = '$FormLoginPhone'";
 					$query .= " WHERE `appt_phone` = '$idophone'";
 					mysqli_query($dbcon, $query);
 				}
-				$_SESSION["UserPhone"] = $FormLoginPhone;
+				$_SESSION["User"]["user_phone"] = $FormLoginPhone;
 				$Usermessage .= "Your phone number has been changed<br />";
 				if ($idophone !=  "") $Usermessage .= " from $idophone";
 				$Usermessage .= " to $FormLoginPhone.";
@@ -186,7 +194,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
 	else { // User is not signed in
 
-		$_SESSION["UserFullName"] = "";
+		$_SESSION["User"]["user_full_name"] = "";
 
 		// Look for a matching email
 		$query = "SELECT * FROM $USER_TABLE";
@@ -195,82 +203,96 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 		$count = mysqli_num_rows($idq);
 		if ($count == 1) {
 			while ($id = mysqli_fetch_array($idq)) {
-				$_SESSION["UserIndex"] = $UserIndex = $id['user_index'];
-				$_SESSION["UserFirst"] = $UserFirst = $id['user_first'];
-				$_SESSION["UserLast"] = $UserLast = $id['user_last'];
-				//$UserFirst = str_replace($id['user_first'], "!", "'");
-				//$_SESSION["UserFirst"] = $UserFirst;
-				//$UserLast = str_replace($id['user_last'], "!", "'");
-				//$_SESSION["UserLast"] = $UserLast;
-				$_SESSION["UserName"] = $UserName = $id['user_name'];
-				$_SESSION["UserFullName"] = $UserFirst . " " . $UserLast;
-				$_SESSION["UserOptions"] = $UserOptions = $id['user_options'];
-				$_SESSION["UserHome"] = $UserHome = ($UserOptions) ? $id['user_home'] : 0;
-				$_SESSION["UserEmail"] = $UserEmail = $id['user_email'];
-				$_SESSION["UserPhone"] = $UserPhone = $id['user_phone'];
+				$_SESSION["User"] = $id;
+				$UserIndex = $id['user_index'];
+				$UserFirst = $id['user_first'];
+				$UserLast = $id['user_last'];
+				$UserName = $id['user_name'];
+				$_SESSION["User"]["user_full_name"] = $UserFirst . " " . $UserLast;
+				$UserOptions = $id['user_options'];
+				$UserHome = ($UserOptions) ? $id['user_home'] : 0;
+				$UserEmail = $id['user_email'];
+				$UserPhone = $id['user_phone'];
 				if ($UserHome == 0) { // is an internet user
 					// set the site list to their last appointment site
 					$id['user_sitelist'] = "|";
 					if ($id['user_appt_site'] > 0) $id['user_sitelist'] .= $id['user_appt_site'] . "|";
 				}
-				$_SESSION["UserSiteList"] = $UserSiteList = $id['user_sitelist'];
+				$UserSiteShow = $id['user_sitelist'];
+				$UserExcelExport = $id['user_excel_export'];
 				$UserPass = $id['user_pass'];
 			}
 			if ($_SESSION["TRACE"]) error_log("INDEX: " . $UserName . ", using email " . $UserEmail); 
 		}
 
-		if ($FormLoginEmail == $UserEmail) {
+		if (strtolower($FormLoginEmail) == strtolower($UserEmail)) {
 
 			switch ($FormLoginAction) { 
 
 				case "NewUser":
-					$Errormessage .= "An account has already exists with that email address.";
-					$UserIndex = $_SESSION["UserIndex"] = 0;
+					$Errormessage .= "An account already exists with that email address.";
+					$UserIndex = $_SESSION["User"]["user_index"] = 0;
 					break;
 
 				case "Login":
-					// check password for a leading dagger
-					if (substr($UserPass,0,1) == chr(134)) {
-						$UserPass = substr($UserPass,1);
-						$Usermessage .= "Please change your password to something easier to remember.";
+					// check password for dagger separators
+					$UserPassPart = explode($Dagger, $UserPass);
+
+					// If using the original correct password, remove the verification code.
+					if ($FormLoginPass == $UserPassPart[0]) {
+						$UserPass = $UserPassPart[0];
+						$LoginHow = "password";
+					}
+					else if ($UserPassPart[1] ?? '') {
+						if (($UserPassPart[2] ?? '') != $TodayDate) {
+							$Errormessage .= "Your 6-digit code has expired. Please request a new one.";
+							$UserPass = $UserPassPart[0];
+						}
+						if (! $Errormessage) {
+							$Usermessage .= "Please change your password to something easier to remember.";
+							$LoginHow = "verification code";
+						}
 					}
 
-					if ($FormLoginPass == $UserPass) {
+					// Does password match either the original or the verification code
+					if (($FormLoginPass == $UserPassPart[0]) OR ($FormLoginPass == $UserPassPart[1])) {
 						$gotophp = "appointment.php";
-						$_SESSION["UserIndex"] = $UserIndex;
-						$_SESSION["UserName"] = $UserName;
-						$_SESSION["UserFirst"] = $UserFirst;
-						$_SESSION["UserLast"] = $UserLast;
-						$_SESSION["UserFullName"] = $UserFirst . " " . $UserLast;
-						$_SESSION["UserEmail"] = $UserEmail;
-						$_SESSION["UserPhone"] = $UserPhone;
-						$_SESSION["UserHome"] = $UserHome;
-						$_SESSION["UserOptions"] = $UserOptions;
-						$_SESSION["UserSiteList"] = $UserSiteList;
+						$_SESSION["User"]["user_index"] = $UserIndex;
+						$_SESSION["User"]["user_name"] = $UserName;
+						$_SESSION["User"]["user_first"] = $UserFirst;
+						$_SESSION["User"]["user_last"] = $UserLast;
+						$_SESSION["User"]["user_full_name"] = $UserFirst . " " . $UserLast;
+						$_SESSION["User"]["user_email"] = $UserEmail;
+						$_SESSION["User"]["user_phone"] = $UserPhone;
+						$_SESSION["User"]["user_home"] = $UserHome;
+						$_SESSION["User"]["user_options"] = $UserOptions;
+						$_SESSION["User"]["user_sitelist"] = $UserSiteShow;
+						$_SESSION["User"]["user_excel_export"] = $UserExcelExport;
 						$FormLoginAction = "";
 
-						// Update user table time stamp
-						$query = "UPDATE `$USER_TABLE`";
-						$query .= " SET `user_lastlogin` = '$TimeStamp'";
+						// Update user table time stamp and password
+						$query = "UPDATE `$USER_TABLE` SET";
+						$query .= " `user_lastlogin` = '$TimeStamp'";
+						$query .= ", `user_pass` = '$UserPass'";
 						$query .= " WHERE `user_index` = $UserIndex";
 						$query .= " LIMIT 1";
 						mysqli_query($dbcon, $query);
-						if ($_SESSION["TRACE"]) error_log("INDEX: " . $UserName . ", logged in.");
+						if ($_SESSION["TRACE"]) error_log("INDEX: $UserName, logged in using $LoginHow.");
 					}
 					else { // No password match
-						$_SESSION["UserIndex"] = $UserIndex = 0;
+						$_SESSION["User"]["user_index"] = $UserIndex = 0;
 						$Errormessage .= "Your email or password is not correct.";
 					}
 					break;
 
 				case "GetPW":
-					$str = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
-					$UserPass = substr(str_shuffle($str),rand(0,strlen($str)-8),8);
-					$UserPass0 = chr(134) . $UserPass; // Add a leading dagger for use later
+					$str = "123456789";
+					$Passcode = substr(str_shuffle($str), rand(0, strlen($str)-6), 6);
+					$UserPassPart = explode($Dagger, $UserPass);
+					$UserPass0 = $UserPassPart[0] . $Dagger . $Passcode . $Dagger . $TodayDate;
 					$query = "UPDATE `$USER_TABLE`";
 					$query .= " SET `user_pass` = '$UserPass0'";
 					$query .= " WHERE `user_index` = $UserIndex";
-					//$query .= " AND `user_first` = '$UserFirst'";
 					$query .= " LIMIT 1";
 					mysqli_query($dbcon, $query);
 
@@ -278,8 +300,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 					$subject = "Your request from the AARP reservation system";
 					$from = "no-reply@tax-aide-reservations.null";
 					$headers = "From: Tax-Aide Appointment Manager<$from>";
-					$message = "Greetings " . $UserFirst . " " . $UserLast . ".\n\n";
-					$message .= "As requested, your password has been reset to \"" . $UserPass . "\".\n";
+					$message = "Greetings $UserFirst $UserLast.\n\n";
+					$message .= "As requested, your verification code is\n\n $Passcode\n\n";
+					$message .= "The verification code is only good for today.\n\n";
 					$message .= "Please change your password the next time you sign in.\n\n";
 					if (substr($to,-5,5) == ".test") {
 						$Alert .= "The following email would have been sent:\\n\\n" . str_replace("\n","\\n",$message);
@@ -290,16 +313,16 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 							error_log("INDEX: " . $log_id . ", Email sent to " . $to . " " . $headers); 
 						}
 					}
-					$Usermessage .= "You should receive an email message in the next few minutes with a new temporary password.";
-					$UserIndex = $_SESSION["UserIndex"] = 0;
-					break;
+					$Usermessage .= "You should receive an email message in the next few minutes. Use that for a new temporary password.";
+					$UserIndex = $_SESSION["User"]["user_index"] = 0;
+					$FormLoginAction = "LogOut";
 
 				case "LogOut":
 					break;
 
 				default:
 					$Errormessage .= "Invalid request";
-					$_SESSION["UserIndex"] = 0;
+					$_SESSION["User"]["user_index"] = 0;
 			}
 		}
 
@@ -316,7 +339,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 		if ($UserIndex == 0) {
 			$UserName = "";
 			if ($FormLoginAction == "NewUser") { // Set up a new account for a self-registering (internet) user
-				$_SESSION["UserIndex"] = 0;
+				$_SESSION["User"]["user_index"] = 0;
 
     				if ($Errormessage == "") {
 					$query = "INSERT INTO `$USER_TABLE`";
@@ -327,16 +350,17 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 						$idx = mysqli_query($dbcon, "SELECT * FROM $USER_TABLE WHERE `user_email` = '$FormLoginEmail' LIMIT 1");
 						$id = mysqli_fetch_array($idx);
 						//$UserPass = $id1['user_pass'];
-						$_SESSION["UserIndex"] = $UserIndex = $id['user_index'];
-						$_SESSION["UserName"] = $UserName = $id['user_name'];
-						$_SESSION["UserFirst"] = $UserFirst = $id['user_first'];
-						$_SESSION["UserLast"] = $UserLast = $id['user_last'];
-						$_SESSION["UserFullName"] = $UserFirst . " " . $UserLast;
-						$_SESSION["UserEmail"] = $UserEmail = $id['user_email'];
-						$_SESSION["UserPhone"] = $UserPhone = $id['user_phone'];
-						$_SESSION["UserSiteList"] = $UserSiteList = $id['user_sitelist'];
-						$_SESSION["UserOptions"] = 0;
-						$_SESSION["UserHome"] = 0;
+						$_SESSION["User"]["user_index"] = $UserIndex = $id['user_index'];
+						$_SESSION["User"]["user_name"] = $UserName = $id['user_name'];
+						$_SESSION["User"]["user_first"] = $UserFirst = $id['user_first'];
+						$_SESSION["User"]["user_last"] = $UserLast = $id['user_last'];
+						$_SESSION["User"]["user_full_name"] = $UserFirst . " " . $UserLast;
+						$_SESSION["User"]["user_email"] = $UserEmail = $id['user_email'];
+						$_SESSION["User"]["user_phone"] = $UserPhone = $id['user_phone'];
+						$_SESSION["User"]["user_sitelist"] = $UserSiteShow = $id['user_sitelist'];
+						$_SESSION["User"]["user_excel_export"] = $UserExcelExport = $id['user_excel_export'];
+						$_SESSION["User"]["user_options"] = 0;
+						$_SESSION["User"]["user_home"] = 0;
 						$FormLoginAction = "";
 						$gotophp = "appointment.php";
 					}
@@ -622,14 +646,6 @@ function Unique_Email($testId, $testEmail) {
 	}
 	
 	//===========================================================================================
-	function Clean_Name(nametotest) {
-	//===========================================================================================
-	nametotest = nametotest.replace(/'/g,"!");
-	nametotest = nametotest.replace(/"/g,"");
-	return (nametotest);
-	}
-
-	//===========================================================================================
 	function Test_For_Enter(id, e) {
 	// id = the id of the element being checked
 	// e = the event being checked for a key code
@@ -663,8 +679,8 @@ function Unique_Email($testId, $testEmail) {
 <div id="Main">
 	<div class="page_header">
 		<h1>Tax-Aide Appointments</h1>
-		<?php if ((isset($_SESSION["UserFullName"]) AND ($_SESSION["UserFullName"]) != "")) {
-			echo "You are signed in as " . _Show_Chars($_SESSION["UserFullName"], "text");
+		<?php if ((isset($_SESSION["User"]["user_full_name"]) AND ($_SESSION["User"]["user_full_name"]) != "")) {
+			echo "You are signed in as " . _Show_Chars($_SESSION["User"]["user_full_name"], "text");
 			}?>
 	</div>
 </div>
@@ -713,13 +729,12 @@ function Unique_Email($testId, $testEmail) {
 		?>
 	</div>
 
-	<br />Appointments at other sites are by phone &ndash; see the <a href="http://www.aarp.org/applications/VMISLocator/searchTaxAideLocations.action" target="_blank">AARP Locator web site</a>.
+	<br />Appointments at other sites are by phone &ndash; see the <a href="https://www.aarp.org/money/taxes/aarp_taxaide/locations.html" target="_blank">AARP Locator web site</a>.
 
 </td>
 
 <td id="init_options">
 	<div id="init_option_box">
-
 		<div id="init_login" class="init_option">
 			<table><tr>
 				<td><img src="Images/opendoor.png" style="width:5em; cursor: pointer;" id="Login_image" onclick="Action_Request('Login')"></td>
@@ -742,16 +757,16 @@ function Unique_Email($testId, $testEmail) {
 			</table>
 
 			<div id="init_getpw">
-			<table id="getpw_data" class="init_data">
-				<tr><td>Enter&nbsp;your&nbsp;email: </td><td><input id="LoginGetPWEmail" type="email" onkeyup="Test_For_Enter(this.id,event);"/></td></tr>
-				<!--
-				<tr><td>Enter your first name: </td><td><input id="LoginGetPWFirst" type="email" /></td></tr>
-				-->
-				<tr>
-					<td colspan="2" class="action_button"><button id="GetPW" onclick="Action_Request(this.id)">Email new password</button>
-					<button onclick="Change_Option('Login')">Cancel</button></td>
-				</tr>
-			</table>
+			<span id="getpw_data" class="init_data">
+				<center>
+				We will email to you a 6-digit verification code for you to use as a temporary password.
+					The code is only good for today.
+				<br /><br />Enter&nbsp;your&nbsp;email:
+					<input id="LoginGetPWEmail" type="email" style="width: 22em;" onkeyup="Test_For_Enter(this.id,event);"/>
+				<br /><button id="GetPW" class="action_button" onclick="Action_Request(this.id)">Send verification code</button>
+					<button class="action_button" onclick="Change_Option('Login')">Cancel</button>
+				</center>
+			</span>
 			</div>
 		</div>
 		
@@ -879,16 +894,16 @@ function Unique_Email($testId, $testEmail) {
 	if ($DEBUG) {
 		echo "<table border=1>";
 		echo "<tr><th>VARIABLE</th><th>SUBMITTED</th><th>DB MATCH</th><th>SESSION VARIABLE</th></tr>";
-		echo "<tr><td>Session Index:</td><td></td><td>$UserIndex</td><td>" . $_SESSION['UserIndex'] . "</td></tr>";
+		echo "<tr><td>Session Index:</td><td></td><td>$UserIndex</td><td>" . $_SESSION['User']['user_index'] . "</td></tr>";
 		echo "<tr><td>FormLoginAction:</td><td>$FormLoginAction</td><td>(N/A)</td><td>(N/A)</td></tr>";
-		echo "<tr><td>FormLoginName:</td><td>$FormLoginName</td><td>$UserName</td><td>" . $_SESSION['UserName'] . "</td></tr>";
-		echo "<tr><td>FormLoginHome:</td><td>$FormLoginHome</td><td>$UserHome</td><td>" . $_SESSION['UserHome'] . "</td></tr>";
-		echo "<tr><td>FormLoginPass:</td><td>$FormLoginPass</td><td>$UserPass</td><td>" . $_SESSION['UserPass'] . "</td></tr>";
-		echo "<tr><td>FormLoginEmail:</td><td>$FormLoginEmail</td><td>$UserEmail</td><td>" . $_SESSION['UserEmail'] . "</td></tr>";
-		echo "<tr><td>FormLoginPhone:</td><td>$FormLoginPhone</td><td>$UserPhone</td><td>" . $_SESSION['UserPhone'] . "</td></tr>";
-		echo "<tr><td>FormLoginFirst:</td><td>$FormLoginFirst</td><td>$UserFirst</td><td>" . $_SESSION['UserFirst'] . "</td></tr>";
-		echo "<tr><td>FormLoginLast:</td><td>$FormLoginLast</td><td>$UserLast</td><td>" . $_SESSION['UserLast'] . "</td></tr>";
-		echo "<tr><td>FormLoginFull:</td><td>(N/A)</td><td>(N/A)</td><td>" . $_SESSION['UserFullName'] . "</td></tr>";
+		echo "<tr><td>FormLoginName:</td><td>$FormLoginName</td><td>$UserName</td><td>" . $_SESSION['User']['user_name'] . "</td></tr>";
+		echo "<tr><td>FormLoginHome:</td><td>$FormLoginHome</td><td>$UserHome</td><td>" . $_SESSION['User']['user_home'] . "</td></tr>";
+		echo "<tr><td>FormLoginPass:</td><td>$FormLoginPass</td><td>$UserPass</td><td>" . $_SESSION['User']['user_pass'] . "</td></tr>";
+		echo "<tr><td>FormLoginEmail:</td><td>$FormLoginEmail</td><td>$UserEmail</td><td>" . $_SESSION['User']['user_email'] . "</td></tr>";
+		echo "<tr><td>FormLoginPhone:</td><td>$FormLoginPhone</td><td>$UserPhone</td><td>" . $_SESSION['User']['user_phone'] . "</td></tr>";
+		echo "<tr><td>FormLoginFirst:</td><td>$FormLoginFirst</td><td>$UserFirst</td><td>" . $_SESSION['User']['user_first'] . "</td></tr>";
+		echo "<tr><td>FormLoginLast:</td><td>$FormLoginLast</td><td>$UserLast</td><td>" . $_SESSION['User']['user_last'] . "</td></tr>";
+		echo "<tr><td>FormLoginFull:</td><td>(N/A)</td><td>(N/A)</td><td>" . $_SESSION['User']['user_full_name'] . "</td></tr>";
 		echo "</table>";
 	}
 ?>
@@ -896,3 +911,4 @@ function Unique_Email($testId, $testEmail) {
 </div> <!-- init_main -->
 
 </body>
+

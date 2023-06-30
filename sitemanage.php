@@ -2,6 +2,10 @@
 //ini_set('display_errors', '1');
 
 // ---------------------------- VERSION HISTORY -------------------------------
+// File Version 9.0
+// 	Fixed %xx chars in Appt Manager listing
+// 	Passwords hidden with ******** but can still be changed
+// 	Added option to disallow internet user to add themselves to the CB list
 // File Version 8.0
 //	Added ClearTrace (error log) function
 //	Added ability to modify default system confirmation/reminder message
@@ -34,19 +38,17 @@
 require "environment.php";
 
 // If the UserIndex has not been set as a session variable, the user needs to sign in
-if (@$_SESSION["UserIndex"] == 0) {
+if (! isset($_SESSION["User"])) {
 	header('Location: index.php'); // prevents direct access to this page (must sign in first).
 	exit;
 }
 
 // Global variables
-$isAdministrator = ($_SESSION["UserOptions"] == "A");
-$isAppointmentManager = ($_SESSION["UserOptions"] == "M");
+$isAdministrator = ($_SESSION["User"]["user_options"] == "A");
+$isAppointmentManager = ($_SESSION["User"]["user_options"] == "M");
 $DEBUG = "" . $_SESSION["DEBUG"];
 $DEBUG = true;
 $Errormessage = "";
-$NullDate = "0000-00-00";
-$NullTime = "00:00:00";
 $TodayDate = Date("Y-m-d");
 $LocationList[0] = 0;
 $Usermessage = "";
@@ -70,27 +72,29 @@ $AFlag = "&#x26EF;";
 $MFlag = "&#x2605;";
 $SFlag = "&#x2606;";
 $VFlag = "&#x26AF;";
+$Phone_icon = "&#x260F;";
+$Name_icon = "<i class='material-icons' style='font-size:1em;'>people</i>"; //"&#x263A;";
+$Email_icon = "&#x2709;";
 $checkboxNo = "";
 $checkboxYes = "&#x2714;";
 
 // Get relevant info about the current user
-$SiteCurrent = $SiteUserHome = $_SESSION["UserHome"];
-$UserPreferred = $_SESSION["UserIndex"];
-$ThisUser= $_SESSION["UserIndex"];
-$UserFirst = $ThisFirst = $_SESSION["UserFirst"];
-$UserLast = $ThisLast = $_SESSION["UserLast"];
-$ThisHome = $UserHome = $_SESSION["UserHome"];
-$ThisName = $_SESSION["UserName"];
-$ThisPhone = $_SESSION["UserPhone"];
-$ThisEmail = $_SESSION["UserEmail"];
-$ThisUserOptions = $_SESSION["UserOptions"];
+$SiteCurrent = $SiteUserHome = $_SESSION["User"]["user_home"];
+$UserPreferred = $_SESSION["User"]["user_index"];
+$ThisIndex = $UserUser = $_SESSION["User"]["user_index"];
+$ThisFirst = $UserFirst = $_SESSION["User"]["user_first"];
+$ThisLast = $UserLast = $_SESSION["User"]["user_last"];
+$ThisHome = $UserHome = $_SESSION["User"]["user_home"];
+$ThisName = $_SESSION["User"]["user_name"];
+$ThisPhone = $_SESSION["User"]["user_phone"];
+$ThisEmail = $_SESSION["User"]["user_email"];
+$ThisUserOptions = $_SESSION["User"]["user_options"];
 $SystemGreeting = $_SESSION["SystemGreeting"];
 $SystemNotice = $_SESSION["SystemNotice"];
 $SystemConfirm = $_SESSION["SystemConfirm"];
 $SystemAttach = $_SESSION["SystemAttach"];
 $SystemURL = $_SESSION["SystemURL"];
-if (!isset($_SESSION["SystemEmail"])) $_SESSION["SystemEmail"] = "no.reply@tax.aide.reservations.no.email";
-$SystemEmail = $_SESSION["SystemEmail"];
+$SystemEmail = $_SESSION["SystemEmail"] ?? "no.reply@tax.aide.reservations.no.email";
 if (! isset($_SESSION["UserSort"])) $_SESSION["UserSort"] = "user_last";
 // Check user permission
 if ((! $isAdministrator) AND (! $isAppointmentManager)) {
@@ -167,7 +171,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 	$_SESSION["SiteCurrent"] = $SiteCurrent;
 
 	// Process request
-	if ($_SESSION["TRACE"]) error_log("MANAGE: " . $ThisName . ", " . $SiteAction);
+	if ($_SESSION["TRACE"]) error_log("MANAGE: $ThisName, Action=$SiteAction");
 	switch ($SiteAction) {
 
 		case "FindByPhone":
@@ -199,7 +203,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 			$query .= ", `site_contact` = '$SiteContact'";
 			$query .= ", `site_help` = ''"; // not used
 			$query .= ", `site_sumres` = '$SiteSumres'";
-			$query .= ", `site_10dig` = '$Site10dig'";
+			$query .= ", `site_10dig` = 'checked'"; // default
 			$addedby = ($isAdministrator) ? 0 : $SiteUserHome;
 			$query .= ", `site_addedby` = $addedby";
 			$SiteMessage = ($SiteMessage) ? $SiteMessage : $SystemConfirm;
@@ -223,9 +227,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 				$SiteUserHome = $SiteCurrent = $SiteIndex;
 				Update_Site_Options($SiteOptions);
 				// Make the current user a manager for this site
-				Write_Site_Option(0, $SiteIndex, $_SESSION["UserIndex"], "M");
+				Write_Site_Option(0, $SiteIndex, $_SESSION["User"]["user_index"], "M");
 				// Give new site scheduling access to the manager's site
-				Write_Site_Option($_SESSION["UserHome"], $SiteIndex, 0, $ACCESS_ALL);
+				Write_Site_Option($_SESSION["User"]["user_home"], $SiteIndex, 0, $ACCESS_ALL);
 			}
 			else {
 				$Errormessage .= "Could not add $Site1Name. Try it again.";
@@ -317,8 +321,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 					$headers .= "Errors-To: $ThisEmail\r\n";
 					$message = "Welcome, " . $UserFullName . ", to the Tax-Aide appointment system.\n\n";
 					$message .= "You have been added to the appointment scheduling system";
-					$message .= " by " . $_SESSION['UserFirst'] . " " . $_SESSION['UserLast'] . ".\n\n";
-					$message .= "You have been given a short user name of " . $UserName . ", used for event logging.\n\n";
+					$message .= " by " . $_SESSION["User"]["user_first"] . " " .  $_SESSION["User"]["user_last"] . "\n\n";
+					$message .= "You have been given a short user name of " . $_SESSION["User"]["user_name"] . ", used for event logging.\n\n";
 					$message .= "Sign in to the appointment system.\n";
 					$message .= "Your Appointment System password is \"" . $UserPass . "\".\n";
 					if (substr($to,-5,5) == ".test") {
@@ -386,7 +390,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 				mysqli_query($dbcon, $query);
 			}
 
-			if ($UserOptions == 0) $UserCurrent = $_SESSION['UserIndex'];
+			if ($UserOptions == 0) $UserCurrent = $_SESSION["User"]["user_index"];
 			// no break
 		case "ViewUser":
 			$UserPreferred = $UserCurrent;
@@ -440,7 +444,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 			$query .= " `user_appt_site` = 0";
 			$query .= " WHERE `user_appt_site` = $SiteCurrent";
 			mysqli_query($dbcon, $query);
-			if ($_SESSION["TRACE"]) error_log("MANAGE: " . $ThisName . ", Site $Site1Name deleted.");
+			if ($_SESSION["TRACE"]) error_log("MANAGE: " . $ThisName . ", Site $Site1Name ($SiteCurrent) deleted.");
 			break;
 
 		case "DeleteUser":
@@ -449,7 +453,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 			$query .= " AND `user_email` = '$UserEmail'";
 			mysqli_query($dbcon, $query);
 			$SiteUserHome = $SiteCurrent;
-			$UserPreferred = $_SESSION['UserIndex'];
+			$UserPreferred = $_SESSION["User"]["user_index"];
 			break;
 
 		case "DeleteUserByDate":
@@ -458,7 +462,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 			$query .= " AND `user_appt_site` = $SiteCurrent";
 			mysqli_query($dbcon, $query);
 			$SiteUserHome = $SiteCurrent;
-			$UserPreferred = $_SESSION['UserIndex'];
+			$UserPreferred = $_SESSION["User"]["user_index"];
 			break;
 
 		case "ChangeSystem":
@@ -513,10 +517,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
 // Make an array of user-managed and shared sites
 // Your user home and unassigned is always a managed site
-$MyManagedSites = array(1, $_SESSION["UserHome"]);
+$MyManagedSites = array(1, $_SESSION["User"]["user_home"]);
 $MySharedSites = array();
-if ($_SESSION["UserHome"] == $SiteUserHome) {
-	array_push($MySharedSites,$_SESSION["UserHome"]);
+if ($_SESSION["User"]["user_home"] == $SiteUserHome) {
+	array_push($MySharedSites, $SiteUserHome);
 }
 
 // ACCESS_TABLE has 2 entry types:
@@ -525,14 +529,14 @@ if ($_SESSION["UserHome"] == $SiteUserHome) {
 // 2. other sites - acc_location is the site index in the SITE_TABLE
 // acc_option is the level of permission given to case 1 or 2 above.
 $query = "SELECT * FROM $ACCESS_TABLE WHERE";
-$query .= " `acc_user` = " . $_SESSION['UserIndex'];
+$query .= " `acc_user` = " . $_SESSION['User']['user_index'];
 $query .= " OR `acc_owner` = " . $SiteUserHome;
 $query .= " ORDER BY acc_location";
 $locs = mysqli_query($dbcon, $query);
 while ($row = mysqli_fetch_array($locs)) {
 	// Add other managed sites to the list
 	// (other site managers have given permission to this person to manage their site)
-	if (($row['acc_user'] == $_SESSION['UserIndex']) and ($row['acc_option'] == "M")) {
+	if (($row['acc_user'] == $_SESSION['User']['user_index']) and ($row['acc_option'] == "M")) {
 		array_push($MyManagedSites,$row['acc_owner']);
 		array_push($MySharedSites,$row['acc_owner']);
 	}
@@ -674,7 +678,9 @@ while ($row = mysqli_fetch_array($usrs)) {
 			if ($NewEmail != $LastManagerEmail) { // skip duplicates
 				$rosterphone = ($NewPhone) ? $NewPhone : "?";
 				$rosterloc = ($NewHome) ? $LocationList[$LocationLookup["S" . $NewHome]] : "?";
-				$ManagerRoster .= "<tr><td>$NewFirst</td><td>$NewLast</td><td>$NewEmail</td><td>$rosterphone</td><td>$rosterloc</td></tr>";
+				$NewFirstC = _Show_Chars($NewFirst, "html");
+				$NewLastC = _Show_Chars($NewLast, "html");
+				$ManagerRoster .= "<tr><td>$NewFirstC</td><td>$NewLastC</td><td>$NewEmail</td><td>$rosterphone</td><td>$rosterloc</td></tr>";
 				$ManagerEmail .= $NewEmail . ";";
 				$LastManagerEmail = $NewEmail;
 			}
@@ -739,7 +745,7 @@ while ($row = mysqli_fetch_array($usrs)) {
 	}
 
 	// Looking at a specfic person...
-	if ($UserPreferred == 0) $UserPreferred = $_SESSION["UserIndex"];
+	if ($UserPreferred == 0) $UserPreferred = $_SESSION['User']['user_index'];
 	if ($NewIndex == $UserPreferred) {
 		$ThisUser = $NewIndex;
 		$ThisFirst = $NewFirst;
@@ -812,6 +818,7 @@ function Update_Site_Options($optionlist) {
 	global $SiteMessage;
 	global $dbcon;
 	global $Errormessage;
+	global $ThisName;
 
 	// Remove prior site options
 	$query = "DELETE FROM $ACCESS_TABLE WHERE `acc_owner` = $SiteCurrent AND `acc_user` = 0";
@@ -820,6 +827,7 @@ function Update_Site_Options($optionlist) {
 	// Make an array of access options
 	$acc_options = explode("|", $optionlist);
 	if (count($acc_options) > 0) {
+		if ($_SESSION["TRACE"]) error_log("MANAGE: $ThisName, Site options=$optionlist");
 		
 		// Set the internet user option
 		$SiteInternet = $acc_options[0];
@@ -1224,7 +1232,7 @@ function Show_Search() {
 		while($row = mysqli_fetch_array($SearchList)) {
 			if ($noMatchFound) {
 				echo "<table id='user_search_table'>\n";
-				echo "<tr><td></td><td>First</td><td>Last</td><td>User&nbsp;Name</td><td>$colhead</td><td>User&nbsp;Role</td><td>Assigned Site</td></tr>\n";
+				echo "<tr class='sticky'><th></th><th>First</th><th>Last</th><th>User&nbsp;Name</th><th>$colhead</th><th>User&nbsp;Role</th><th>Assigned Site</th></tr>\n";
 				$noMatchFound = false;
 			}
 			$Name = _Show_Chars(htmlspecialchars_decode($row['user_name'] ?? ''), "text");
@@ -1302,6 +1310,7 @@ function Show_Search() {
 <meta name="viewport" content="width=device-width">
 <link rel="SHORTCUT ICON" href="appt.ico">
 <link rel="stylesheet" href="appt.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
 <script src="functions.js"></script>
 <script>
 	//===========================================================================================
@@ -1843,19 +1852,23 @@ function Show_Search() {
 		site_phone.value = "";
 		site_email.value = "";
 		site_website.value = "";
+		site_sendemail.checked = false;
 		new_sitedata["address"] = ""; // clear saved address
 		site_instructions.value = "";
 		site_attach.value = "";
+		Change_Site_Message(); // Closes message section
+		site_sumres.checked = false;
 		site_clients.checked = false;
-		site_clients_cblistonly.checked = false;
+		site_clients_cbonly.checked = false;
 		site_clients_options.style.display = "none";
+		Change_Other_Sites(''); // Closes inet section
 		site_10dig.checked = true;
 		site_clients_inet.style.border = "";
 		new_sitedata["options"] = "";
 		site_add.style.visibility = "hidden";
 		site_add_flag = true;
 		Resize_Div("New Site");
-
+				
 		Display_Site_Buttons();
 		site_new_name.focus();
 	}
@@ -1953,7 +1966,7 @@ function Show_Search() {
 			if (siteAttList[attindex].checked) {
 				systAttLine = _Show_Chars(systAttList[attindex], "text").split("=");
 				new_sitedata["attach"] += (systAttLine[0] + "|");
-				attachContent += (attachBreak + " - " + systAttLine[0] + " (" + systAttLine[1]);
+				attachContent += (attachBreak + " - " + systAttLine[0] + " (" + systAttLine[1] + ")");
 				attachBreak = "<br />"; // add a line break before the next attachment
 			}
 		}
@@ -1991,32 +2004,30 @@ function Show_Search() {
 
 		// show which internet boxes should be checked and/or disabled
 		switch (site_clients_inetopts[0]) {
-			case "C": // Callback list only
-				site_clients_cblistonly.checked = true;
-				site_clients_cblistonly.disabled = false;
-				site_clients_restrict.checked = false;
-				site_clients_restrict.disabled = true;
+			case "S": // Schedule reservation even if callback list big
+				site_clients_cbalways.checked = true;
 				site_clients.checked = true;
-				site_clients_limit.value = 0;
+				site_clients_options.style.display = "table-cell";
 				break;
 			case "R": // Restrict reservations if callback list big
-				site_clients_restrict.checked = true;
-				site_clients_restrict.disabled = false;
-				site_clients_cblistonly.checked = false;
-				site_clients_cblistonly.disabled = true;
+				site_clients_cbrestrict.checked = true;
 				site_clients.checked = true;
+				site_clients_options.style.display = "table-cell";
 				break;
-			case "S": // Schedule reservation even if callback list big
+			case "C": // Callback list only
+				site_clients_cbonly.checked = true;
 				site_clients.checked = true;
-				site_clients_restrict.checked = false;
-				site_clients_restrict.disabled = false;
-				site_clients_cblistonly.checked = false;
-				site_clients_cblistonly.disabled = false;
+				site_clients_options.style.display = "table-cell";
+				site_clients_limit.value = 0;
+				break;
+			case "N": // Cannot add to callback list
+				site_clients_cbnone.checked = true;
+				site_clients.checked = true;
+				site_clients_options.style.display = "table-cell";
 				break;
 			default: // No internet scheduling allowed
-				site_clients_restrict.checked = false;
-				site_clients_cblistonly.checked = false;
 				site_clients.checked = false;
+				site_clients_options.style.display = "none";
 		}
 
 		// clear all site permission boxes
@@ -2043,7 +2054,7 @@ function Show_Search() {
 		site_10dig.checked = (old_sitedata["10dig"]) ? "checked" : "" ;
 		site_instructions.value = old_sitedata["instructions"];
 		site_clients_options.style.display = (site_clients.checked) ? "inline" : "none";
-		if (! site_clients.checked) site_clients_cblistonly.checked = false;
+		if (! site_clients.checked) site_clients_cbonly.checked = false;
 
 		// Add borders to active option areas
 		site_clients_inet.style.border = (site_clients.checked) ? "1px solid grey" : "";
@@ -2055,7 +2066,7 @@ function Show_Search() {
 	function Change_Other_Sites(whichbox) {
 	// whichbox is the id of the box that was changed
 	// build the site option string:
-	// null or C or R or S ":" # appts "|" string of site IDs ":47" separated by "|"
+	//     null or C or R or S ":" # appts "|" string of site IDs ":47" separated by "|"
 	//===========================================================================================
 		// Get address information for the currently selected site
 		// Toggle the checkmark
@@ -2073,21 +2084,27 @@ function Show_Search() {
 		site_clients_inet.style.border = (site_clients.checked) ? "1px solid grey" : "";
 		site_others_access.style.border = (site_others.checked) ? "1px solid grey" : "";
 		if (! site_clients.checked) {
-			site_clients_cblistonly.checked = false;
-			site_clients_restrict.checked = false;
+			site_clients_cbalways.checked = false;
+			site_clients_cbnone.checked = false;
+			site_clients_cbonly.checked = false;
+			site_clients_cbrestrict.checked = false;
 		}
 
-		// allow only 1 of the suboptions to be checked at a time
-		site_clients_restrict.disabled = site_clients_cblistonly.checked;
-		site_clients_cblistonly.disabled = site_clients_restrict.checked;
-		if (site_clients_cblistonly.checked) site_clients_limit.value = 0;
-		else if (site_clients_limit.value == 0) site_clients_limit.value = 1;
+		// prevent negative number for appoointment limit
+		if (+site_clients_limit.value <= 0) site_clients_limit.value = 1;
 
 		// build an option string from the input fields
 		new_sitedata["options"] = "";
-		if (site_clients_cblistonly.checked) new_sitedata["options"] = "C";
-		else if (site_clients_restrict.checked) new_sitedata["options"] = "R";
-		else if (site_clients.checked) new_sitedata["options"] = "S";
+		if (site_clients_cbonly.checked) {
+			new_sitedata["options"] = "C";
+			site_clients_limit.value = 0; // cannot make appointments
+		}
+		else if (site_clients_cbalways.checked) new_sitedata["options"] = "S";
+		else if (site_clients_cbnone.checked) new_sitedata["options"] = "N";
+		else if (site_clients.checked) {
+			new_sitedata["options"] = "R"; // default
+			site_clients_cbrestrict.checked = true;
+			}
 		if (new_sitedata["options"] !== "") new_sitedata["options"] += ":" + site_clients_limit.value;
 
 		if (site_others.checked) { // build the rest of the option string
@@ -2770,6 +2787,7 @@ function Show_Search() {
 				}
 				//Check_For_Changes("before adding a new site."); // check done earlier
 				SiteForm.Site1Name.value = site_new_name.value;
+
 				Build_Site_Address();
 				SiteForm.Site1Address.value = new_sitedata["address"];
 				SiteForm.SiteContact.value = new_sitedata["contact"];
@@ -2882,7 +2900,7 @@ function Show_Search() {
 			case "DeleteSite":
 				<?php global $isAdministrator, $isManager;
 				if ($isAdministrator OR $isManager) {
-					echo "if (SiteForm.SiteCurrent.value == " . $_SESSION['UserHome'] . ") {\n";
+					echo "if (SiteForm.SiteCurrent.value == " . $_SESSION["User"]["user_home"] . ") {\n";
 						echo "alert(\"You cannot remove this site. Change your home site first, then log out and log back in again.\");";
 						echo "return;\n}\n";
 				};
@@ -2905,7 +2923,7 @@ function Show_Search() {
 					echo "}\n\n"; // end of 'M' test
 
 					// additional test for administrators
-					echo "if ((SiteForm.UserCurrent.value == " . $_SESSION['UserIndex'] . ") && (Administrators.length < 2)) {\n";
+					echo "if ((SiteForm.UserCurrent.value == " . $_SESSION["User"]["user_index"] . ") && (Administrators.length < 2)) {\n";
 						echo "message = 'You cannot remove yourself as an administrator until another has been assigned that position!';\n";
 						echo "alert (message);\n";
 						echo "Restore_User_Data();\n";
@@ -3025,23 +3043,21 @@ function Show_Search() {
 	//	ID	element ID which called the function
 	//===========================================================================================
 		switch (ID) {
-			case "FindByNameButton":
+			case "FindByName":
 			case "SearchApptName":
 				FindByName.checked = true;
 				break;
-			case "FindByEmailButton":
+			case "FindByEmail":
 			case "SearchApptEmail":
 				FindByEmail.checked = true;
 				break;
-			case "FindByPhoneButton":
+			case "FindByPhone":
 			case "SearchAppt":
 			case "SearchApptPhone":
 			default:
 				FindByPhone.checked = true;
 		}
-		FindByNameButton.style.backgroundColor = FindByName.checked ? "lightgreen" : "transparent";
-		FindByEmailButton.style.backgroundColor = FindByEmail.checked ? "lightgreen" : "transparent";
-		FindByPhoneButton.style.backgroundColor = FindByPhone.checked ? "lightgreen" : "transparent";
+		FindByVal.placeholder = (FindByPhone.checked) ? "333-555-1234" : "";
 		user_search_box.style.visibility = "visible";
 		FindByVal.focus();
 	}
@@ -3119,16 +3135,16 @@ function Test_For_Enter(id, e) {
 
 	<div class="appt_page_header">
 		<h1>Site and User Administration</h1>
-		<?php echo "You are signed in as " . _Show_Chars($_SESSION["UserFullName"], "text");?>
+		<?php echo "You are signed in as " . _Show_Chars($_SESSION["User"]["user_first"] . " " . $_SESSION["User"]["user_last"], "text");?>
 
 		<div class="menu-buttons">
 			<div class="menuButton" onclick="Action_Request('GoToAppointments')">Manage appointments</div>
 
 			<div class='menuButton' id='SearchAppt'>Search
 				<div class='menuButtonList'>
-					<div class='menuButtonListItem' id='SearchApptPhone' onclick='Show_SearchBox(this.id)'>&#x260F; Search by Phone Number</div>
-					<div class='menuButtonListItem' id='SearchApptName' onclick='Show_SearchBox(this.id)'>&#x263A; Search by Name</div>
-					<div class='menuButtonListItem' id='SearchApptEmail' onclick='Show_SearchBox(this.id)'>&#x2709; Search by Email</div>
+				<div class='menuButtonListItem' id='SearchApptPhone' onclick='Show_SearchBox(this.id)'><?php echo $Phone_icon;?> Search by Phone Number</div>
+				<div class='menuButtonListItem' id='SearchApptName' onclick='Show_SearchBox(this.id)'><?php echo $Name_icon;?> Search by Name</div>
+					<div class='menuButtonListItem' id='SearchApptEmail' onclick='Show_SearchBox(this.id)'><?php echo $Email_icon;?> Search by Email</div>
 				</div>
 			</div>
 <?php
@@ -3212,7 +3228,7 @@ function Test_For_Enter(id, e) {
 
 <!-- ================================= System Tab ======================================== -->
 <div id="system_page" style="display: none;">
-<div id="system_wrapper" class="safe" style="border: 1px solid black;">
+<div id="system_wrapper" class="safe" style="border: 1px solid black; border-top: none;">
 
 	<div id="system_page_div" class="safe">
 
@@ -3347,7 +3363,7 @@ function Test_For_Enter(id, e) {
 			</table>
 		</div>
 
-		<div id="site_options_div" style="overflow: auto;">
+		<div id="site_options_div" style="overflow: auto; overflow-y: auto;">
 
 		<div id="site_current" onchange="Build_Site_Address();">
 			<table id="site_current_table" class="address_table">
@@ -3384,8 +3400,8 @@ function Test_For_Enter(id, e) {
 					value="<?php global $ThisAddress; echo $ThisAddress[6];?>" /></td>
 					<td>[WEBSITE]</td></tr>
 				<tr><td>Email messages:
-					<span id="view_m_button"
-						<br /><button id="view_message_button" style="margin-top: 4em;" onclick="View_Message()">&nbsp;View&nbsp;</button></span>
+					<span id="view_m_button">
+						<br /><button id="view_message_button" style="margin-top: 4em; margin-left: 7em;" onclick="View_Message()">&nbsp;View&nbsp;</button></span>
 					</td>
 					<td colspan="2" id="site_email_optbox" onchange="Change_Site_Message();">
 						<input id="site_sendemail" title="Check box to send confirmation emails" type="checkbox" />
@@ -3430,25 +3446,33 @@ function Test_For_Enter(id, e) {
 						title = " " />
 						Require 10-digit phone numbers with optional toll prefix (recommended)</td></tr>
 				<tr><td>Internet access:
-					<span id="view_i_button"
-						<br /><button id="view_instructions_button" style="margin-top: 12em;" onclick="View_Instructions()">&nbsp;View&nbsp;</button>
-					</span> </td>
+					<span id="view_i_button">
+						<br /><button id="view_instructions_button" style="margin-top: 16em; margin-left: 7em;" onclick="View_Instructions()">&nbsp;View&nbsp;</button>
+						</span> </td>
+
 					<td colspan="2" id="site_clients_inet" onchange="Change_Other_Sites('');">
 						<input id="site_clients" type="checkbox" /> Allow internet taxpayers to make their own appointment.
 						<span id="site_clients_options">
 						<table style="width: 100%; margin-left: 1em;">
-							<tr><td colspan="2" style="padding-left: 1.6em;">Limit a taxpayer&apos;s internet scheduling to
+							<tr><td colspan="2" style="padding-left: 1.6em;">
+								<table>
+									<tr><td style="text-align: right; width: 0;">Internet&nbsp;access&nbsp;open:&nbsp;<br />through:&nbsp;</td>
+									<td><input id="site_open" type="date" value="<?php global $ThisOpen; echo $ThisOpen;?>" />
+									<br /><input id="site_closed" type="date" value="<?php global $ThisClosed; echo $ThisClosed;?>" ></td></tr>
+								</table></td></tr>
+							<tr><td colspan="2" style="padding-left: 1.6em;">
+								Callback list options:
+									<br /><input id="site_clients_cbalways" type="radio" name="site_clients_cbopt" value="S" />
+										Always allow to add to callback list.
+									<br /><input id="site_clients_cbrestrict" type="radio" name="site_clients_cbopt" value="R" />
+										Only add to callback list if callback list is longer than available appointments (recommended).
+									<br /><input id="site_clients_cbonly" type="radio" name="site_clients_cbopt" value="C" />
+										Cannot schedule own appointment. Can only add to callback list.
+									<br /><input id="site_clients_cbnone" type="radio" name="site_clients_cbopt" value="N" />
+										Can only schedule own appointment. Cannot add to callback list.
+									<br /><br />Limit a taxpayer&apos;s internet scheduling to
 								<input id="site_clients_limit" type="number" /> appointment(s), including at other sites.</td></tr>
-							<tr><td colspan="2"><input id="site_clients_restrict" type="checkbox" />
-								Restrict to callback list if callback list is longer than available appointments (recommended).</td></tr>
-							<tr><td colspan="2"><input id="site_clients_cblistonly" type="checkbox" />
-								Restrict to callback list always.</td></tr>
 							</table>
-						<table style="width: 100%; margin-left: 0;">
-							<tr><td style="text-align: right; width: 0;">Internet&nbsp;access&nbsp;open:&nbsp;<br />through:&nbsp;</td>
-							<td><input id="site_open" type="date" value="<?php global $ThisOpen; echo $ThisOpen;?>" />
-							<br /><input id="site_closed" type="date" value="<?php global $ThisClosed; echo $ThisClosed;?>" ></td></tr>
-						</table>
 						<table style="width: calc(100%-1em); margin-left: 1em;">
 							<tr><td colspan="2">Additional instructions for the taxpayer for this site:</td></tr>
 							<tr>
@@ -3461,7 +3485,7 @@ function Test_For_Enter(id, e) {
 						</table>
 						</span></td></tr>
 				<tr><td>Other site access:</td>
-					<td id="site_others_access" onchange="Change_Other_Sites('');">
+					<td id="site_others_access" colspan="2" onchange="Change_Other_Sites('');">
 						<input id="site_others" type="checkbox" <?php global $OptionList; if ($OptionList) echo " checked"?> />
 							Allow other sites to view or schedule your taxpayers.
 						<span id="osite_list">
@@ -3615,14 +3639,15 @@ function Test_For_Enter(id, e) {
 				Phone: <input id="acc_phone" type="text"
 				<?php global $ThisPhone, $ThisHome, $SiteUserHome, $isAdmiinistrator;
 				echo "value='" . $ThisPhone . "'";
-				if (($ThisHome != $SiteUserHome) and ($ThisHome != 1) and (! $isAdministrator)) echo " disabled"; ?>
+				//if (($ThisHome != $SiteUserHome) and ($ThisHome != 1) and (! $isAdministrator)) echo " disabled"; ?>
 				onkeyup="Change_User_Name();" />
 				</td></tr>
 			<tr><td>Password:</td><td><input id="acc_pass" type="text"
 				<?php global $ThisPass, $ThisHome, $SiteUserHome, $ThisUserOptions, $isAdministrator;
-				if ((($ThisHome != $SiteUserHome) and ($ThisHome != 1) and (! $isAdministrator))
-					OR (($ThisUserOptions == "A") and (! $isAdministrator))) echo "style=' display:none;'";
-				echo " value='" . $ThisPass . "'";
+				//if ((($ThisHome != $SiteUserHome) and ($ThisHome != 1) and (! $isAdministrator))
+				//	OR (($ThisUserOptions == "A") and (! $isAdministrator))) echo "style=' display:none;'";
+				$ShowPass = ($isAdministrator) ? $ThisPass : "********" ;
+				echo " value='" . $ShowPass . "'";
 				?>
 				onkeyup="Change_User_Name();" />
 			<tr><td>Email:</td><td><input id="acc_email" type="text"
@@ -3717,15 +3742,9 @@ function Test_For_Enter(id, e) {
 	<br />
 	<div>
 		Search by:
-		<button id="FindByPhoneButton" onclick="Show_SearchBox(this.id);">
-		<input id="FindByPhone" type="radio" name="FindOption" <?php if ($SiteAction == "FindByPhone") echo "checked"; ?> />
-			Phone</button>
-		<button id="FindByNameButton" onclick="Show_SearchBox(this.id);">
-			<input id="FindByName" type="radio" name="FindOption" <?php if ($SiteAction == "FindByName") echo "checked"; ?> />
-			Name</button>
-		<button id="FindByEmailButton" onclick="Show_SearchBox(this.id);">
-			<input id="FindByEmail" type="radio" name="FindOption" <?php if ($SiteAction == "FindByEmail") echo "checked"; ?> />
-			Email</button>
+		<input id="FindByPhone" type="radio" name="FindOption" onchange="Show_SearchBox(this.id);" /> Phone
+		<input id="FindByName" type="radio" name="FindOption" onchange="Show_SearchBox(this.id);" /> Name
+		<input id="FindByEmail" type="radio" name="FindOption" onchange="Show_SearchBox(this.id);" /> Email
 	</div>
 	<!-- 20em width below overrides css calculated. The max-width setting will not override calculation -->
 	<input id="FindByVal" type="text" width="20em" onkeyup="Test_For_Enter(this.id,event)" />
@@ -3743,4 +3762,5 @@ function Test_For_Enter(id, e) {
 
 </div> <!-- main -->
 
+</html>
 </body>

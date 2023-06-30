@@ -1,4 +1,6 @@
 <?php
+// Version 9.0
+// 	Modifications due to user SESSION variable consolidation
 // Version 5.00
 ini_set('display_errors', '1');
 // This is an AJAX file used to update user options
@@ -7,7 +9,7 @@ ini_set('display_errors', '1');
 require "environment.php";
 
 // If the UserIndex has not been set as a session variable, the user needs to log in
-if (! ($_SESSION["UserIndex"] > 0)) {
+if (! isset($_SESSION["User"])) {
 	header('Location: index.php');
 }
 
@@ -19,7 +21,7 @@ $patternLoc = $q[2];
 $patternName = $q[3];
 $patternData = $q[4];
 $patternEnd = $q[5];
-if ($_SESSION["TRACE"]) error_log("PATT: " . $_SESSION["UserName"] . ", Request=" . $request . ", Site=" . $patternLoc . ", Pattern=" . $patternName);
+if ($_SESSION["TRACE"]) error_log("PATT: " . $_SESSION["User"]["user_name"] . ", Request=" . $request . ", Site=" . $patternLoc . ", Pattern=" . $patternName);
 if ($patternEnd !== "$") {
 	error_log("PATT: Invalid request=" . $_GET["q"]);
 	exit;
@@ -48,7 +50,7 @@ switch ($request) {
 }
 $result = mysqli_query($dbcon, $query);
 if ($result != 1) {
-	error_log("PATT :" . $_SESSION["UserName"] . ", " . $request . " failed");
+	error_log("PATT :" . $_SESSION["User"]["user_name"] . ", " . $request . " failed");
 	echo 0;
 	return;
 }

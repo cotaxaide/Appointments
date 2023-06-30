@@ -1,9 +1,8 @@
-/*
-// Version 7.00
 /* for all pages ------------------------------------------------------- */
 
 body {
 	background-color: #FFFFCC;
+	font-family: sans-serif;
 }
 
 h1 {
@@ -13,6 +12,7 @@ h1 {
 button {
 	text-align: center;
 	margin: 1em;
+	border-radius: 5px;
 	cursor: pointer;
 }
 
@@ -106,11 +106,11 @@ textarea {
 .sticky {
 	position: -webkit-sticky;
 	position: sticky;
-	top: -1px;
+	top: -3px;
 	background-color: inherit;
 }
 
-#Excel-icon {
+.Excel-icon {
 	height: 1em;
 }
 
@@ -268,6 +268,7 @@ textarea {
 }
 .init_data {
 	background-color: lightblue;
+	padding: 5px;
 	display: none;
 }
 .init_data tr td input {
@@ -488,7 +489,7 @@ textarea {
 	display: none;
 }
 #acc_first, #acc_name {
-	width: 10em;
+	width: 9em;
 }
 #acc_last {
 	width: 14em;
@@ -538,7 +539,7 @@ textarea {
 }
 
 .address_table {
-	width: 100%;
+	width: 98%;
 }
 .address_table tr td:first-child {
 	width: 10em;
@@ -717,7 +718,6 @@ textarea {
 
 #user_search_table {
 	width: 100%;
-	cursor: pointer;
 	text-align: left;
 }
 
@@ -880,7 +880,7 @@ textarea {
 	background-color: #FFAAAA;
 	position: fixed;
 	top: 0;
-	z-index: 3;
+	z-index: 99;
 	font-size: 100%;
 	padding: 2px;
 }
@@ -916,9 +916,9 @@ textarea {
 	text-align: center;
 }
 #ApptDataTable tr td {
-	vertical-align: middle;
+	vertical-align: text-top;
 }
-#ApptDataTable:first-child {
+#ApptDataTable tr td:first-child {
 	width: 5em;
 	text-align: right;
 	font-weight: bold;
@@ -933,11 +933,14 @@ textarea {
 	border-color: #000000;
 	background-color: #FFFFAA;
 	position: absolute;
-	left: 60%;
+	left: 50%;
 	top: 30%;
-	width:40%;
+	width:48%;
 	z-index: 1;
 	font-size: 100%;
+}
+#LSTCheckbox {
+	text-align: left;
 }
 .statusbutton {
 	margin: 1px;
@@ -989,9 +992,13 @@ textarea {
 #SlotStart, #SlotStop {
 	width: 10em;
 }
+#SlotsToAdd {
+	width: 2em;
+}
 #SBGoButton {
 	background-color: hotpink;
 }
+#StatsTitle,
 #EBTitle,
 #SBTitle {
 	width: 100%;
@@ -1013,6 +1020,7 @@ textarea {
 .SBOptClass {
 	width: 100%;
 }
+#StatsBoxClose,
 #ExportBoxClose,
 #SlotBoxClose {
 	position: absolute;
@@ -1089,7 +1097,8 @@ textarea {
 	cursor: pointer;
 }
 .apptFull {
-	background-color: hotpink;
+	background-color: tomato;
+	color: black;
 	cursor: pointer;
 }
 .apptKey {
@@ -1103,6 +1112,9 @@ textarea {
 }
 .noSelect {
 	cursor: not-allowed;
+}
+.yesSelect {
+	cursor: pointer;
 }
 .apptUser {
 	color: blue;
@@ -1197,6 +1209,7 @@ textarea {
 	height: 1em;
 	background-color: palegreen;
 	z-index: 2;
+	cursor: pointer;
 }
 .apptNameUnres {
 	position: absolute;
@@ -1210,6 +1223,7 @@ textarea {
 	height: 1em;
 	background-color: pink;
 	z-index: 2;
+	cursor: pointer;
 }
 .apptNameUnresNot {
 	position: absolute;
@@ -1240,8 +1254,8 @@ textarea {
 }
 .apptPhone {
 	text-align: right;
-	width: 7em;
-	max-width: 7em;
+	width: 8em;
+	max-width: 8em;
 }
 .apptStatus {
 	width: 13em;
@@ -1335,57 +1349,71 @@ textarea {
 	width: 46%;
 } 
 #StatusOther {
-	width: 80%;
+	width: 76%;
 }
 #StatusText {
 	width: 94%;
 	height: 15.5em;
 }
 #SearchBox {
-	border: 2px solid black;
-	visibility: hidden;
-	background-color: #AAFFAA;
 	position: absolute;
 	left: 35%;
 	top: 20%;
+	bottom: 1em;
 	width: 35%;
 	min-width: 30em;
 	z-index: 20;
 	font-size: 100%;
 	text-align: center;
+	overflow-y: auto;
 }
-#FindByNameButton, #FindByPhoneButton, #FindByEmailButton {
-	width: 7em;
-	border: 0, 4px;
+#SearchHeaderDiv,
+#SearchButtonDiv,
+#SearchTableDiv {
+	border: 2px solid black;
+	background-color: #AAFFAA;
+}
+#SearchTableDiv {
+	border-top: none;
+	border-bottom: none;
+}
+#SearchButtonDiv {
+	border-top: 1px solid black;
+}
+#FindByName, #FindByPhone, #FindByEmail{
+	margin-left: 1em;
 }
 
 #SearchResults {
 	width: 100%;
 	position: relative;
 	max-height: 25em;
-	overflow: auto;
+	//overflow-y: auto;
 }
 #search_table {
 	width: 100%;
 }
 #search_table tr td:first-child {
 	width: 1em;
-	cursor: pointer;
 }
 #search_table tr td:nth-child(2) {
-	cursor: pointer;
 	text-align: left;
 }
 #search_table tr td:nth-child(3) {
-	width: 3em;
-	max-width: 3em;
-	cursor: pointer;
+	width: 4em;
+	max-width: 4em;
 }
 #search_table tr td:nth-child(4) {
 	width: 4em;
 	max-width: 4em;
 	text-align: right;
-	cursor: pointer;
+}
+.search_site {
+	background-color: #5fc596;
+	cursor: not-allowed;
+}
+.deletedrecords {
+	display: none;
 }
 #FindByVal {
 	width: calc(100% - 1em);
@@ -1457,6 +1485,48 @@ textarea {
 	padding-left: 3em;
 	float: left;
 	}
+
+#StatsBox {
+	display: none;
+	position: fixed;
+	left: 30%;
+	top: 20%;
+	bottom: 0.5em;
+	z-index: 20;
+	font-size: 100%;
+	text-align: center;
+	overflow: auto;
+}
+#StatsDiv {
+	background-color: lightgreen;
+	border: 1px solid black;
+}
+#StatsHeader {
+	font-weight: bold;
+	text-align: center;
+	background-color: lightgreen;
+}
+#StatsTableDiv {
+	background-color: #AAFFAA;
+}
+
+#LocStatTable {
+}
+#LocStatTable tr td {
+	min-width: 5em;
+	text-align: center;
+	border-bottom: 1px solid lightgrey;
+}
+#LocStatTable tr td:first-Child {
+	text-align: left;
+	overflow:hidden
+}
+.LocStatSee {
+	display: table-row;
+}
+.LocStatHide {
+	display: none;
+}
 
 /* for viewtrace.php -------------------------------------------------- */
 .trace_daybox {
