@@ -4,7 +4,11 @@
 // - creates the opendb.php file so that all php routines have access to the database
 
 //--------------------------------- VERSION HISTORY -----------------------------------
-$VERSION = "9.01";
+$VERSION = "9.03";
+//	Configure_Table for ACCESS_TABLE moved before Configure_Columns
+//$VERSION = "9.02";
+//	Added heartbeat to system table for updating Daily View
+//$VERSION = "9.01";
 //	Added NOT NULL to all fields without a default value
 //	Increased appt_type from 1 to 10 characters
 //$VERSION = "8.05";
@@ -106,6 +110,7 @@ if (file_exists("opendb.php")) {
 	$_SESSION["SystemAttach"] = $row['system_attach'] ?? "";
 	$_SESSION["SystemInfo"] = $row['system_info'];
 	$_SESSION["SystemURL"] = $systemURL = $row['system_url'];
+	$_SESSION["SystemHeartbeat"] = $row['system_heartbeat'];
 	$_SESSION["TRACE"] = $row['system_trace'];
 	// New in version 5.00
 	$system_email = (isset($row['system_email'])) ? $row['system_email'] : "" ;
@@ -203,13 +208,14 @@ Configure_Column($SYSTEM_TABLE, "system_url", "TEXT NOT NULL");
 Configure_Column($SYSTEM_TABLE, "system_email", "TEXT NOT NULL");
 Configure_Column($SYSTEM_TABLE, "system_reminders", "TEXT NOT NULL");
 Configure_Column($SYSTEM_TABLE, "system_trace", "VARCHAR(1) NOT NULL");
+Configure_Column($SYSTEM_TABLE, "system_heartbeat", "INT NOT NULL");
 
 global $ACCESS_TABLE;
+Configure_Table($ACCESS_TABLE, "acc_index", "BIGINT AUTO_INCREMENT PRIMARY KEY");
 Configure_Column($ACCESS_TABLE, "acc_owner", "BIGINT UNSIGNED NOT NULL");
 Configure_Column($ACCESS_TABLE, "acc_location", "BIGINT UNSIGNED NOT NULL");
 Configure_Column($ACCESS_TABLE, "acc_user", "BIGINT UNSIGNED NOT NULL");
 Configure_Column($ACCESS_TABLE, "acc_option", "TINYTEXT NOT NULL");
-Configure_Table($ACCESS_TABLE, "acc_index", "BIGINT AUTO_INCREMENT PRIMARY KEY");
 
 global $USER_TABLE;
 Configure_Table($USER_TABLE, "user_index", "BIGINT AUTO_INCREMENT PRIMARY KEY");
@@ -246,12 +252,12 @@ Configure_Column($SITE_TABLE, "site_10dig", "TEXT NOT NULL");
 
 global $APPT_TABLE;
 Configure_Table($APPT_TABLE, "appt_no", "BIGINT AUTO_INCREMENT PRIMARY KEY");
-Configure_Column($APPT_TABLE, "appt_date", "DATE DEFAULT $NullDate");
+Configure_Column($APPT_TABLE, "appt_date", "DATE DEFAULT " . "'" . $NullDate . "'");
 Configure_Column($APPT_TABLE, "appt_time", "TIME NOT NULL");
 Configure_Column($APPT_TABLE, "appt_name", "TEXT NOT NULL");
 Configure_Column($APPT_TABLE, "appt_location", "BIGINT NOT NULL");
 Configure_Column($APPT_TABLE, "appt_email", "VARCHAR(256) NOT NULL");
-Configure_Column($APPT_TABLE, "appt_emailsent", "DATE DEFAULT $NullDate");
+Configure_Column($APPT_TABLE, "appt_emailsent", "DATE DEFAULT " . "'" . $NullDate . "'");
 Configure_Column($APPT_TABLE, "appt_phone", "VARCHAR(50) NOT NULL");
 Configure_Column($APPT_TABLE, "appt_tags", "TEXT NOT NULL");
 Configure_Column($APPT_TABLE, "appt_need", "TEXT NOT NULL");
@@ -260,7 +266,7 @@ Configure_Column($APPT_TABLE, "appt_status", "TEXT NOT NULL");
 Configure_Column($APPT_TABLE, "appt_wait", "BIGINT NOT NULL");
 Configure_Column($APPT_TABLE, "appt_change", "DATETIME NOT NULL");
 Configure_Column($APPT_TABLE, "appt_by", "TEXT NOT NULL");
-Configure_Column($APPT_TABLE, "appt_tracking", "TEXT NOT NULL");
+Configure_Column($APPT_TABLE, "appt_tracking", "TEXT");
 Configure_Column($APPT_TABLE, "appt_type", "VARCHAR(10) NOT NULL");
 
 global $SCHED_TABLE;
@@ -300,6 +306,7 @@ function Configure_Column($tablename, $columnname, $optionlist) {
 	//either add or modify the column's characteristics
 	$query = "ALTER TABLE `$tablename`";
 	$query .= " $action COLUMN `$columnname` $optionlist";
+	//error_log("ADM: " . $query); // for debugging
 	mysqli_query($dbcon, $query);
 }
 

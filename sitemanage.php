@@ -2,6 +2,8 @@
 //ini_set('display_errors', '1');
 
 // ---------------------------- VERSION HISTORY -------------------------------
+// File Version 9.02
+// 	Added administration for heartbeat interval
 // File Version 9.0
 // 	Fixed %xx chars in Appt Manager listing
 // 	Passwords hidden with ******** but can still be changed
@@ -95,6 +97,7 @@ $SystemConfirm = $_SESSION["SystemConfirm"];
 $SystemAttach = $_SESSION["SystemAttach"];
 $SystemURL = $_SESSION["SystemURL"];
 $SystemEmail = $_SESSION["SystemEmail"] ?? "no.reply@tax.aide.reservations.no.email";
+$SystemHeartbeat = $_SESSION["SystemHeartbeat"] ?? 0;
 if (! isset($_SESSION["UserSort"])) $_SESSION["UserSort"] = "user_last";
 // Check user permission
 if ((! $isAdministrator) AND (! $isAppointmentManager)) {
@@ -162,6 +165,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 		$SystemAttach =                               trim($_POST["SystemAttach"]);
 		$SystemURL =    htmlspecialchars(stripslashes(trim($_POST["SystemURL"])));
 		$SystemEmail =  htmlspecialchars(stripslashes(trim($_POST["SystemEmail"])));
+		$SystemHeartbeat =  htmlspecialchars(stripslashes(trim($_POST["SystemHeartbeat"])));
 	}
 
 	$UserFullName = "$UserFirst" . " " . "$UserLast";
@@ -473,6 +477,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 			$query .= ", `system_attach` = '$SystemAttach'";
 			$query .= ", `system_url` = '$SystemURL'";
 			$query .= ", `system_email` = '$SystemEmail'";
+			$query .= ", `system_heartbeat` = '$SystemHeartbeat'";
 			$query .= " WHERE `system_index` = 1";
 			mysqli_query($dbcon, $query);
 			$_SESSION["SystemGreeting"] = $SystemGreeting;
@@ -481,6 +486,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 			$_SESSION["SystemAttach"] = $SystemAttach;
 			$_SESSION["SystemURL"] = $SystemURL;
 			$_SESSION["SystemEmail"] = $SystemEmail;
+			$_SESSION["SystemHeartbeat"] = $SystemHeartbeat;
 			break;
 
 		case "StartTrace":
@@ -1430,6 +1436,7 @@ function Show_Search() {
 		old_systemdata["SystemNotice"] = system_notice.value;
 		old_systemdata["SystemURL"] = system_url.value;
 		old_systemdata["SystemEmail"] = system_email.value;
+		old_systemdata["SystemHeartbeat"] = system_heartbeat.value;
 
 		checkboxYes = optYes.innerHTML;
 		checkboxNo = optNo.innerHTML;
@@ -1552,6 +1559,7 @@ function Show_Search() {
 		if (system_greeting.value == "") system_greeting.value = GreetingMessage;
 		if (system_email.value == "") system_email.value = DefaultEmail;
 		if (system_confirm.value == "") system_confirm.value = ConfirmMessage;
+		if ((system_heartbeat.value > 0) && (system_heartbeat.value < 5000)) system_heartbeat.value = 5000;
 		gobutton.href = system_url.value;
 		Make_Attachment_List();
 		Display_System_Buttons();
@@ -1640,6 +1648,7 @@ function Show_Search() {
 		system_email.value = old_systemdata["SystemEmail"];
 		system_confirm.value = old_systemdata["SystemConfirm"];
 		system_attach.value = old_systemdata["SystemAttach"];
+		system_heartbeat.value = old_systemdata["SystemHeartbeat"];
 		Show_Attachment_List();
 		Display_System_Buttons();
 	}
@@ -1657,6 +1666,7 @@ function Show_Search() {
 		if (system_attach.value != old_systemdata["SystemAttach"]) system_change_flag = true; 
 		if (system_url.value != old_systemdata["SystemURL"]) system_change_flag = true; 
 		if (system_email.value != old_systemdata["SystemEmail"]) system_change_flag = true; 
+		if (system_heartbeat.value != old_systemdata["SystemHeartbeat"]) system_change_flag = true; 
 
 		// Determine what buttons to show
 		if (system_change_flag) {
@@ -2994,6 +3004,7 @@ function Show_Search() {
 				results = _Verify_Email(system_email.value, "alert");
 				if (results[0]) return;
 				SiteForm.SystemEmail.value = system_email.value;
+				SiteForm.SystemHeartbeat.value = system_heartbeat.value;
 				SiteForm.SystemGreeting.value = _Clean_Chars(system_greeting.value);
 				SiteForm.SystemNotice.value = _Clean_Chars(system_notice.value);
 				SiteForm.SystemConfirm.value = _Clean_Chars(system_confirm.value);
@@ -3252,12 +3263,21 @@ function Test_For_Enter(id, e) {
 					onchange="Change_System_Data()" />
 				</td></tr>
 
+			<tr>	<td>Daily View update interval:</td><td></td>
+				<td class="left"><input id="system_heartbeat" type="number"
+					title="the interval in milliseconds for update to changes in Daily View appointment slots. Off = 0."
+					value="<?php echo $_SESSION['SystemHeartbeat'];?>"
+					onchange="Change_System_Data()" />
+					milliseconds. (0 = off) or no less than 5000 (5 seconds))
+				</td></tr>
+
 			<tr>	<td>Periodic email reminder:</td><td></td>
 				<td colspan="2" class="left"><?php
 					if ($_SESSION['SystemReminders']) echo "Last ran on " . $_SESSION['SystemReminders'] . "."; 
 					else echo "(No timed reminder task has run.)"
 				?>
 				</td></tr>
+
 		</table>
 	</div> <!-- system_page_div -->
 
@@ -3732,6 +3752,7 @@ function Test_For_Enter(id, e) {
 	<br />SAttach: <input id="SystemAttach" name="SystemAttach" value="<?php echo $_SESSION['SystemAttach']; ?>" />
 	<br />SysURL: <input id="SystemURL" name="SystemURL" />
 	<br />SysEmail: <input id="SystemEmail" name="SystemEmail" />
+	<br />SysHeartbeat: <input id="SystemHeartbeat" name="SystemHeartbeat" />
 </form>
 </div> <!-- SiteDiv -->
 

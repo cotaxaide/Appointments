@@ -1,4 +1,7 @@
 <?php
+// Version 9.02
+// 	Added elements and classes to some elements for the new heartbeat function
+// 	Also classes to make reports sort properly
 // Version 9.00
 // 	Added new option to prevent User adding self to CB list
 // 	Fixed not showing appointments as scheduled but in phone match list
@@ -83,14 +86,14 @@ function Show_Slots() {
 	// -----------------------------------------------------------------------------------------
 	if ($ApptView == "ViewDeleted") {
 	// -----------------------------------------------------------------------------------------
-		$header = "<div class='slotlist'>\n";
+		$header = "<div class='slotlist' style=\"top: 0;\">\n";
 		$header .= "<table id='daily_table' class='apptTable'>";
-		$header .= "<tr class='apptGroup'>\n";
-		$header .= "<th colspan='2' class='sticky left'>Deleted List:</th>\n";
-		$header .= "<th class='center apptPhone sticky'></th>\n";
-		$header .= "<th class='apptNeed sticky'></th>\n";
-		$header .= "<th class='apptNeed sticky'></th>\n";
-		$header .= "<th class='apptStatus sticky'></th></tr>\n";
+		//$header .= "<tr class='apptGroup'>\n";
+		//$header .= "<th colspan='2' class='sticky left'>Deleted List:</th>\n";
+		//$header .= "<th class='center apptPhone sticky'></th>\n";
+		//$header .= "<th class='apptNeed sticky'></th>\n";
+		//$header .= "<th class='apptNeed sticky'></th>\n";
+		//$header .= "<th class='apptStatus sticky'></th></tr>\n";
 		echo $header;
 
 		//Fetching from the database table.
@@ -178,19 +181,27 @@ function Show_Slots() {
 	if (($ApptView == "ViewDaily") or ($ApptView == "ViewCallback")) { // Daily view
 	// -----------------------------------------------------------------------------------------
 
+		$top = 0;
+		if ($ApptView == "ViewDaily") {
+			$ShowDate = Format_Date($FirstSlotDate, true); // set $MON which is global
+			$HeaderText = "Appointments for $ShowDate:";
+			echo "<div><b>$HeaderText</b></div>\n";
+			$top = "1.2em";
+		}
+
 		//Start the table
-		echo "<div class='slotlist'>\n";
+		echo "<div class='slotlist' style=\"top:$top;\">\n";
 		echo "<table id='daily_table' class='apptTable'>\n";
 		$AddSlotLoc = "";
 		$HomeSite = $Site["S" . $UserHome];
 		if ($ApptView == "ViewCallback") {
 			$FirstSlotDate = $NullDate;
-			$HeaderText = "Callback List:";
+			//$HeaderText = "Callback List:";
+			//echo "<tr class='apptGroup'>\n";
+			//echo "<th colspan='6' class='sticky left'>$HeaderText</th>\n";
 		}
 		else {
-			$ShowDate = Format_Date($FirstSlotDate, true); // set $MON which is global
-			$HeaderText = "Appointments for $ShowDate:";
-			if ($FirstSlotDate == $NullDate) {
+			if ($FirstSlotDate == $NullDate) { // End the table
 				$HeaderText = "No appointments found";
 				echo "<tr class='apptGroup'><td colspan='7'>$HeaderText</td></tr>\n";
 				echo "</table>\n";
@@ -198,13 +209,6 @@ function Show_Slots() {
 				return;
 			}
 		}
-		echo "<tr class='apptGroup'>\n";
-		echo "<th colspan='6' class='sticky left'>$HeaderText</th>\n";
-		//echo "<th class='center apptPhone sticky'>Phone</th>\n";
-		//echo "<th class='apptNeed sticky'>Note</th>\n";
-		//echo "<th class='apptNeed sticky'>Info</th>\n";
-		//echo "<th class='apptStatus sticky'>Status</th>\n";
-
 
 		//Fetching from the database table.
 		$query = "SELECT * FROM $APPT_TABLE";
@@ -495,10 +499,19 @@ function Show_Slots() {
 			List_Locations($ADD_APP);
 			echo "</select>\n";
 			echo "<button onclick='AddNewTime(\"$FirstSlotDate\")'>(Click to add)</button>\n";
+
 		}
+
+		// Add placeholder for displaying debugging responses from AJAX heartbeat
+		if ($ApptView == "ViewDaily") {
+			echo '<div id="xmlTest"></div>';
+		}
+
+		// Close the view div
 		echo "</div>\n";
 
-	} // End of Daily/Wait views
+
+	} // End of Daily/Callback views
 
 	// -----------------------------------------------------------------------------------------
 	if (($ApptView == "ViewUser") OR ($ApptView == "ViewSummary")) { // User or Summary views 
@@ -987,6 +1000,10 @@ function List_Slot($SaveAppt, $SlotNumber, $SlotIndex, $myclass, $Name="", $Phon
 		$CanView = $CanViewAppt;
 	}
 	if ($CanView) {
+		// -----------------------------------------------------
+		// In this section, if there are changes, be sure to coordinate those changes with
+		// The Heartbeat javascript function in the appointment.php module and subsequent processing
+		// -----------------------------------------------------
 		$addTags = ($addTags) ? " <b>[$addTags]</b>" : "";
 	
 		if ($titleNot) { // block the link
@@ -998,37 +1015,61 @@ function List_Slot($SaveAppt, $SlotNumber, $SlotIndex, $myclass, $Name="", $Phon
 
 		echo "\t<td class='apptSlot $slotclass'>&nbsp;$SlotIndex&nbsp;&nbsp;</td>\n";
 		echo "\t<td id='apptName$SlotNumber' class='apptName $myclass'>";
+		$apptNameId = "apptNameId" . $SlotNumber;
+		$apptClickId = "apptClickId" . $SlotNumber;
+		$apptSlotEmpty = "";
+		$saveApptDB = $SaveAppt;
 		if ($ApptView == "ViewDaily") { // add the reserved icon in the name column
 			$nameBlank = ($Name == "");
 			$nameReserved = ($Name == $RESERVED);
 			if (! $nameReserved) $Name = _Show_Chars($Name, "html");
 			switch (true) {
 				case ($nameBlank AND $CanUseReserved): // add the icon
-					echo "<div class='apptNameDiv'><div class='apptNameRes' title='Reserve this slot' onclick='Change_Appointment(-1, $SaveAppt, $SlotNumber, $SlotIndex);'>R</div></div>";
-
+					echo "<div class='apptNameDiv'>
+						<div><span id=\"$apptNameId\"></span></div>
+						<div id=\"$apptClickId\" class='apptNameRes' 
+							title='Reserve this slot' 
+							onclick='Change_Appointment(-1, $SaveAppt, $SlotNumber, $SlotIndex);'>R</div></div>";
+					$apptSlotEmpty = "apptSlotEmpty";
+					$saveApptDB = $SaveAppt; // redundant but here for clarity	
 					break;
 				case ($nameReserved AND $CanUseReserved): // add RESERVED and the icon
-					echo "<div class='apptNameDiv'><div class='apptReserved'>$Name</div>
+					echo "<div class='apptNameDiv'>
+						<div class='apptReserved'><span id=\"$apptNameId\">$Name</span></div>
 						<div class='apptNameUnres'>R</div>
-						<div class='apptNameUnresNot'
+						<div id=\"$apptClickId\" class='apptNameUnresNot'
 							title='Unreserve this slot'
 							onclick='Change_Appointment(-1, $SaveAppt, $SlotNumber, $SlotIndex);'>
 							<b>/</b></div>
 						</div>";
+					$apptSlotEmpty = "apptSlotEmpty";
+					$saveApptDB = -$SaveAppt;
 					break;
 				case ($nameReserved): // add RESERVED but no icon
-					echo "<div class='apptNameDiv noSelect'><div class='apptReserved'>$Name</div></div>";
+					echo "<div class='apptNameDiv noSelect'>
+						<div class='apptReserved'><span id=\"$apptNameId\">$Name</span></div>
+						</div>";
+					$apptSlotEmpty = "apptSlotEmpty";
+					$saveApptDB = -$SaveAppt;
 					break;
 				default: // add the name and no icon
-					echo ($Name . $addTags);
+					echo "<div class='apptNameDiv'>
+						<div'><span id=\"$apptNameId\">$Name</span> $addTags</div>
+						</div>";
+					$apptSlotEmpty = "apptSlotInUse";
+					$saveApptDB = $SaveAppt; // redundant but here for clarity
 			}
 			echo "</td>\n";
 		}
-		else echo ($Name . $addTags . "</td>\n");
+		else { // ViewUser
+			echo ($Name . $addTags . "</td>\n");
+		}
 		echo "\t<td id='apptPhone$SlotNumber' class='apptPhone $myclass'>$Phone</td>\n";
 		echo "\t<td id='apptNeed$SlotNumber' class='apptNeed $myclass' $NeedTitle>$needmark</td>\n";
-		echo "\t<td id='apptInfo$SlotNumber' class='apptNeed $myclass' $InfoTitle>$infomark</td>\n";
-		echo "\t<td id='apptStatus$SlotNumber' class='apptStatus $inetclass $myclass' title='$FirstStatus'>$FirstStatus</td></tr>\n";
+		echo "\t<td id='apptInfo$SlotNumber' class='apptInfo $myclass' $InfoTitle>$infomark</td>\n";
+		echo "\t<td id='apptStatus$SlotNumber' class='apptStatus $inetclass $myclass' title='$FirstStatus'>$FirstStatus</td>\n";
+		echo "\t<td id='apptSlot$SlotNumber' class='$apptSlotEmpty' style='display:none;'>$SlotNumber</td>\n";
+		echo "\t<td id='apptDBId$SlotNumber' class='apptDBId' style='display:none;'>$saveApptDB</td></tr>\n";
 	}
 }
 
@@ -1098,3 +1139,6 @@ function Add_Shortcodes($Loc, $message) {
 	return $message;
 }
 ?>
+
+
+

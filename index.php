@@ -1,4 +1,6 @@
 <?php
+// Version 9.02
+// 	Changes to support Daily View heartbeat AJAX updating
 // Version 9.00
 // 	Changed temporary PW from character string to 6-digit verification code
 // 	Changed user SESSION variables to be all in one array
@@ -61,6 +63,7 @@ while ($row = mysqli_fetch_array($sys)) {
 	$_SESSION["SystemNotice"] = $sysnotice = $row['system_notice'];
 	$_SESSION["SystemURL"] = $sysURL = htmlspecialchars_decode($row['system_url'] ?? '');
 	$_SESSION["SystemVersion"] = $row['system_version'];
+	$_SESSION["SystemHeartbeat"] = $row['system_heartbeat'];
 	$_SESSION["TRACE"] = $row['system_trace'];
 
 	// replace shortcode in greeting and notice

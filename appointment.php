@@ -2,7 +2,14 @@
 //ini_set('display_errors', '1');
 
 // ---------------------------- VERSION HISTORY -------------------------------
-//File Version 9.00
+//File Version 9.03
+//	Configuring slots caused system crash
+//	Moving appointment caused system crash due to null emailsent field
+//	Empty slots added by configurator not working correctly with heartbeat
+//File Version 9.02
+//	Added periodic update via an adjustible heartbeat
+//	Corrected the checkin list to match the displayed appointments
+//File Version 9.01
 //	Major restructure to consolodate numerous site lists into a single "site" collection
 //	Fixed some issues with permissions
 //	Added an archival type code "A" to prevent loss of records due to invalid site number
@@ -148,7 +155,7 @@ $FormApptNeed = "";
 $FormApptInfo = "";
 $FormApptReason = "InitialLogin";
 $FormApptStatus = "";
-$FormApptTimeStamp = $TimeStamp;
+$FormApptTimeStamp = $MyTimeStamp;
 $FormApptOldNo = "";
 $MyWebsite = "";
 $WaitSequence = 0;
@@ -518,7 +525,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 						$query .= " `appt_name` = '$ResName'";
 						$query .= ", `appt_phone` = ''";
 						$query .= ", `appt_email` = ''";
-						$query .= ", `appt_emailsent` = ''";
+						$query .= ", `appt_emailsent` = '$NullDate'";
 						$query .= ", `appt_tags` = ''";
 						$query .= ", `appt_need` = ''";
 						$query .= ", `appt_info` = ''";
@@ -527,7 +534,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 						$query .= ", `appt_by` = '$UserFirst $UserLast'";
 						$query .= ", `appt_change` = '$MyTimeStamp'";
 						$query .= " WHERE `appt_no` = $FormApptOldNo";
-						$query .= " AND `appt_date` != $NullDate";
+						$query .= " AND `appt_date` != '$NullDate'";
 						mysqli_query($dbcon, $query);
 					}
 
@@ -539,7 +546,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 					}
 
 					// Prepare to send email
-					if ($dy0 != $NullDate) {
+					if ($dy0 != '$NullDate') {
 						$EM_Reason = $FormApptReason;
 						$EM_View = $ApptView;
 						$EM_Name = _Show_Chars($FormApptName, "text");
@@ -598,6 +605,12 @@ if ($_SESSION["TRACE"]) {
 	}
 }
 
+// Get current value of heartbeat
+$query = "SELECT * FROM $SYSTEM_TABLE";
+$sys = mysqli_query($dbcon, $query);
+if ($sys != NULL) $row = mysqli_fetch_array($sys);
+$_SESSION['SystemHeartbeat'] = $row['system_heartbeat'] ?? 0;
+
 // MaxPermissions is the highest of all - helps control what buttons they see
 $MaxPermissions = $UserPermissions;
 
@@ -608,7 +621,7 @@ $query = "SELECT * FROM $ACCESS_TABLE";
 $query .= " WHERE `acc_user` = $UserIndex";
 $query .= " ORDER BY `acc_owner`, `acc_user`";
 $locs = mysqli_query($dbcon, $query);
-if (! $locs == NULL) while ($row = mysqli_fetch_array($locs)) {
+if ($locs != NULL) while ($row = mysqli_fetch_array($locs)) {
 	$accOwner = $row["acc_owner"];
 	$accUser = $row["acc_user"];
 	$accOption = $row["acc_option"];
@@ -630,7 +643,7 @@ $j = 0;
 $query = "SELECT * FROM $SITE_TABLE";
 $query .= " ORDER BY `site_name`";
 $locs = mysqli_query($dbcon, $query);
-while ($row = mysqli_fetch_array($locs)) {
+if ($locs != NULL) while ($row = mysqli_fetch_array($locs)) {
 	$SIndex = "S" . $row["site_index"];
 	if ($SIndex == "S1") continue; // Skip the "Unassigned" site
 	$ThisSite = array();
@@ -748,7 +761,7 @@ function Create_Menu() {
 		echo "</div>\n";
 	}
 	echo "<div class='menuButton' id='LogOut' onclick='Log_Out();'>Sign out</div>\n";
-	echo "<div class='menuButton' style='z-index: 99' id='DebugText'>" . $Debug . "</div>\n";
+	echo "<div class='menuButton' style='z-index: 99; background-color: white;' id='DebugText'>" . $Debug . "</div>\n";
 	echo "</div>\n";
 }
 
@@ -855,7 +868,7 @@ function Calc_Slots() {
 	$query = "SELECT * FROM $APPT_TABLE";
 	$query .= " ORDER BY `appt_date`, `appt_time`, `appt_location`, `appt_wait`";
 	$appointments = mysqli_query($dbcon, $query);
-	while ($row = @mysqli_fetch_array($appointments)) {
+	if ($appointments != NULL) while ($row = mysqli_fetch_array($appointments)) {
 		$Appt = $row["appt_no"];
 		$Date = $row["appt_date"];
 		$Time = $row["appt_time"];
@@ -1448,7 +1461,7 @@ function List_Patterns() {
 	$query .= " ORDER BY `site_index`, `sched_name`";
 	$scheds = mysqli_query($dbcon, $query);
 	$oldLoc = 0;
-	while ($row = mysqli_fetch_array($scheds)) {
+	if ($scheds != NULL) while ($row = mysqli_fetch_array($scheds)) {
 		$patternId = $row["sched_index"];
 		$patternLoc = $row["site_index"];
 		$patternName = _Show_Chars($row["sched_name"], "text");
@@ -1659,6 +1672,7 @@ function Do_Search() {
 		case "FindByPhoneOrEmail":
 			// This case is used after a successful Add
 			if ($FormApptPhone) $query .= " WHERE `appt_phone` = '$FormApptPhone'";
+			else return; // Phone number is required
 			if ($FormApptEmail) $query .= " or `appt_email` = '$FormApptEmail'";
 			//$FindByVal is the newly added appointment number
 			break;
@@ -1684,9 +1698,10 @@ function Do_Search() {
 	}
 	$query .= " AND `appt_name` != ''";
 	$query .= " ORDER BY `appt_location`, `appt_date`, `appt_time`";
+	//error_log($query); // DEBUG
 	$appointments = mysqli_query($dbcon, $query);
 	$j = 0;
-	while($row = mysqli_fetch_array($appointments)) $Searchlist[$j++] = $row;
+	if ($appointments != NULL) while($row = mysqli_fetch_array($appointments)) $Searchlist[$j++] = $row;
 	unset($appointments);
 }
 
@@ -1861,8 +1876,9 @@ function Configure_Slots() {
 	global $ApptView;
 	global $ShowSlotBox;
 
-	if ($_SESSION["TRACE"])
+	if ($_SESSION["TRACE"]) {
 		error_log("APPT: $UserName, view=$ApptView, action=$FormApptNo, dates=$FormApptSlotDates");
+	}
 
 	$ShowSlotBox = true;
 	if ($FormApptNo == "SlotRemoveAll") {
@@ -1875,17 +1891,17 @@ function Configure_Slots() {
 	if ($FormApptNo == "SlotRemoveDeleted") {
 		$query = "DELETE FROM $APPT_TABLE";
 		$query .= " WHERE `appt_location` = +$FormApptSlotLoc";
-		$query .= " AND `appt_type` LIKE 'D@'";
+		$query .= " AND `appt_type` LIKE '%D%'";
 		mysqli_query($dbcon, $query);
 		return;
 	}
 
 	if ($FormApptNo == "SlotDeleteCallback") {
 		$query = "UPDATE $APPT_TABLE SET";
-		$query .= " `appt_type` LIKE 'D@'";
+		$query .= " `appt_type` = 'D'";
 		$query .= " WHERE `appt_location` = +$FormApptSlotLoc";
 		$query .= " AND `appt_date` = '$NullDate'";
-		$query .= " AND `appt_name` <> ''";
+		$query .= " AND `appt_type` NOT LIKE '%D%'";
 		mysqli_query($dbcon, $query);
 		return;
 	}
@@ -1909,7 +1925,7 @@ function Configure_Slots() {
 		$query = "SELECT * FROM $APPT_TABLE";
 		$query .= " WHERE `appt_location` = +$FormApptSlotLoc";
 		$appointments = mysqli_query($dbcon, $query);
-		while ($row = mysqli_fetch_array($appointments)) {
+		if ($appointments != NULL) while ($row = mysqli_fetch_array($appointments)) {
 			$Appt = $row["appt_no"];
 			$OldDate = $row["appt_date"];
 			$YMD = explode("-", $OldDate);
@@ -2028,6 +2044,7 @@ function InsertNewAppt($iName, $iPhone, $iEmail, $iTags, $iNeed, $iInfo, $iStatu
 	$query .= ", `appt_date` = '$iDate'";
 	$query .= ", `appt_time` = '$iTime'";
 	$query .= ", `appt_location` = " . +$iLoc;
+	$query .= ", `appt_type` = '|'";
 	$query .= ", `appt_by` = '$iBy'";
 	//error_log("QUERY1: " . $query); // DEBUG
 	mysqli_query($dbcon, $query);
@@ -2046,9 +2063,9 @@ function Print_Sites() { // for DEBUGGING
 }
 
 ?>
-<!--=================================================== WEB PAGE HEADER ============================================-->
-<!--=================================================== WEB PAGE HEADER ============================================-->
-<!--=================================================== WEB PAGE HEADER ============================================-->
+<!--================================================ WEB PAGE HEADER =========================================-->
+<!--================================================ WEB PAGE HEADER =========================================-->
+<!--================================================ WEB PAGE HEADER =========================================-->
 
 <head>
 <title>AARP Appointments</title>
@@ -2093,15 +2110,16 @@ function Print_Sites() { // for DEBUGGING
 	global $USE_RES;
 	global $TodayDate;
 	global $ViewDate;
-	$vars  = "\nvar RESERVED = \"$RESERVED\";\n";
-	$vars .= "\nvar ApptView = \"$ApptView\";\n";
-	$vars .= "\nvar UserName = \"$UserName\";\n";
-	$vars .= "\nvar UserFullName = \"$UserFullName\";\n";
-	$vars .= "\nvar TodayDate = \"$TodayDate\";\n";
-	$vars .= "\nvar ViewDate = \"$FirstSlotDate\";\n";
-	$vars .= "\nvar SummaryAll = " . (@$_SESSION["SummaryAll"] ? "true" : "false") . "\n";
-	$vars .= "\nvar NullDate = \"$NullDate\"\n";
-	$vars .= "\nvar ExportList = \"" . $_SESSION["User"]["user_excel_export"] . "\";\n";
+	$vars  = "\nvar RESERVED = \"$RESERVED\";";
+	$vars .= "\nvar ApptView = \"$ApptView\";";
+	$vars .= "\nvar UserName = \"$UserName\";";
+	$vars .= "\nvar UserFullName = \"$UserFullName\";";
+	$vars .= "\nvar TodayDate = \"$TodayDate\";";
+	$vars .= "\nvar ViewDate = \"$FirstSlotDate\";";
+	$vars .= "\nvar SummaryAll = " . (@$_SESSION["SummaryAll"] ? "true" : "false") . ";";
+	$vars .= "\nvar NullDate = \"$NullDate\";";
+	$vars .= "\nvar ExportList = \"" . $_SESSION["User"]["user_excel_export"] . "\";";
+	$vars .= "\nvar SystemHeartbeat = +" . $_SESSION['SystemHeartbeat'] . ";";
 	echo $vars;
 	global $ApptMove;
 	global $FormApptOldNo;
@@ -2125,6 +2143,8 @@ function Print_Sites() { // for DEBUGGING
 	var OpCode;
 	var CtrlKey = false;
 	var LastPattern = "";
+	var ProcessingXML = false;
+	var HeartbeatInterval;
 
 	//===========================================================================================
 	function Initialize() {
@@ -2212,6 +2232,10 @@ function Print_Sites() { // for DEBUGGING
 
 		// Was there a search and only one result
 		//if (document.getElementById("SearchGo") != null) SearchGo.click();
+		
+		if (ApptView == "ViewDaily") {
+			if (SystemHeartbeat) HeartbeatInterval = setInterval(AJAX_Heartbeat, SystemHeartbeat);
+		}
 	}
  
 	//===========================================================================================
@@ -2864,7 +2888,13 @@ function Print_Sites() { // for DEBUGGING
 		var FootNeedText = "";
 		var Paginate = 1;
 		var k = 0;
-		for (var j = 1; j <= ApptCount; j++) {
+
+		// Get the list of appointments, in the order displayed in the Daily View
+		DBIdElements = document.getElementsByClassName("apptDBId");
+		for (var dbi = 0; dbi < DBIdElements.length; dbi++) {
+			j = ApptNoVal.indexOf(DBIdElements[dbi].innerHTML);
+			if (j == -1) continue;
+		//for (var j = 1; j <= ApptCount; j++) {
 			var NewTime = ApptTimeVal[j];
 
 			if (NewTime != OldTime) {
@@ -3780,6 +3810,182 @@ function Print_Sites() { // for DEBUGGING
 		change_history.style.display = (change_history.style.display == 'none') ? 'block' : 'none';
 	}
 
+	//===========================================================================================
+	function AJAX_Heartbeat() {
+	//===========================================================================================
+		if (ProcessingXML) return; // Heartbeat too soon - still process the last one
+		if (ApptView != "ViewDaily") return;
+
+		// Get the list of empty slots (blank and reserved)
+		var emptySlotList = document.getElementsByClassName("apptSlotEmpty");
+		var inUseSlotList = document.getElementsByClassName("apptSlotInUse");
+		var openList = [];
+
+		// Make an array of database Ids for Ajax query
+		for (j = 0; j < emptySlotList.length; j++) {
+			slotNo = Math.abs(emptySlotList[j].innerHTML);
+			openList.push(document.getElementById("apptDBId" + slotNo).innerHTML);
+		}
+		for (j = 0; j < inUseSlotList.length; j++) {
+			slotNo = Math.abs(inUseSlotList[j].innerHTML);
+			openList.push(document.getElementById("apptDBId" + slotNo).innerHTML);
+		}
+	
+		// using AJAX to submit the list to verify that the entries are still blank
+		var xmlhttp = new XMLHttpRequest();
+		xmlhttp.onreadystatechange = function() {
+           		if (this.readyState == 4 && this.status == 200) {
+				if (this.responseText != "") {
+					Update_Empty(this.responseText);
+					return;
+				}
+				else {
+					return;
+				}
+			}
+		}
+		ol = openList.toString();
+		qout = "q=" + "" + ol + "";
+		xmlhttp.open("POST", "checkslots.php", true);
+		xmlhttp.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
+		xmlhttp.send(qout);
+		ProcessingXML = true;
+		xmlTest.innerHTML = "";
+	}
+
+	//===========================================================================================
+	function Update_Empty(changes) {
+	//===========================================================================================
+		if (ApptView != "ViewDaily") return; // If we left Daily View, ignore the results
+		xmlTest.style.display = "none"; // change to block for testing
+		if (changes == "STOP") clearInterval(HeartbeatInterval);
+		xmlTest.innerHTML = changes;
+		x = document.getElementsByClassName("xmlslot");
+		//DebugText.innerHTML = x.length;
+		for (j = 0 ; j < x.length; j++) {
+			// Get the data for this updated slot
+			xSlot = document.getElementsByClassName("xmlappt")[j].innerText;
+			xName = document.getElementsByClassName("xmlname")[j].innerText ?? "" ;
+			xEmail = _Show_Chars((document.getElementsByClassName("xmlemail")[j].innerText ?? "" ), "html");
+			xPhone = _Show_Chars((document.getElementsByClassName("xmlphone")[j].innerText ?? "" ), "html");
+			xTags = _Show_Chars((document.getElementsByClassName("xmltags")[j].innerText ?? "" ), "html");
+			xNeed = _Show_Chars((document.getElementsByClassName("xmlneed")[j].innerText ?? "" ), "html");
+			xInfo = _Show_Chars((document.getElementsByClassName("xmlinfo")[j].innerText ?? "" ), "html");
+			xStatus = _Show_Chars((document.getElementsByClassName("xmlstatus")[j].innerText ?? "" ), "html");
+			//DebugText.innerHTML = ("Slot="+xSlot+", Name="+xName+", Status="+xStatus);
+			
+			// Update data tables 
+			xApptIndex = ApptNoVal.indexOf(xSlot);
+			if (xApptIndex == -1) { // This slot has changed - likely deleted - so skip this update
+				xName = RESERVED;
+				xPhone = xEmail = xEmail = xTags = xNeed = xInfo = xStatus = "UPDATE THIS PAGE";
+			}
+			ApptNameVal[xApptIndex] = xName;
+			ApptPhoneVal[xApptIndex] = xPhone;
+			ApptEmailVal[xApptIndex] = xEmail;
+			ApptTagsVal[xApptIndex] = xTags;
+			ApptNeedVal[xApptIndex] = xNeed;
+			ApptInfoVal[xApptIndex] = xInfo;
+			ApptStatusVal[xApptIndex] = xStatus;
+
+			// Update Daily View display
+			// The Name element has a number of DIVs within it and we need to know the
+			// content of some of those inner DIVs to build the content for the new
+			// context.
+			xNameElement = document.getElementById("apptName" + xApptIndex);
+			xPhoneElement = document.getElementById("apptPhone" + xApptIndex);
+			xInfoElement = document.getElementById("apptInfo" + xApptIndex);
+			xNeedElement = document.getElementById("apptNeed" + xApptIndex);
+			xStatusElement = document.getElementById("apptStatus" + xApptIndex);
+			xClickIdElement = document.getElementById("apptClickId" + xApptIndex) ?? "";
+			xNameIdElement = document.getElementById("apptNameId" + xApptIndex) ?? "";
+			xNameIdLocal = xNameIdElement.innerText;
+			xClass = "apptInUse"; // default for assigned and reserved slots
+			xResAllowed = (xNameElement.innerHTML.search(">R<") > -1 ); // true/false
+			RESERVEDChars = _Show_Chars(RESERVED, "text");
+			RESERVEDCharsHTML = _Show_Chars(RESERVED, "html");
+			if (xName === RESERVEDChars) xName = RESERVEDCharsHTML;
+			
+			// Update each appointment record
+			switch (xName) { // xName is the current database value
+			case "":
+				//DebugText.innerHTML = "|" + xNameIdLocal + "|" + "" + "|";
+				if (xNameIdLocal == "") continue; // No change
+				if (xNameIdLocal == RESERVEDChars) { // Change to blank
+				//	if (xClickIdElement) {
+						xInner = "<div class='apptNameDiv'>";
+						xInner += ("<div><span id='apptNameId" + xApptIndex + "'></span></div>");
+
+						if (xResAllowed) {
+							xInner += "<div id='apptClickId" + xApptIndex + "'";
+					        		xInner += " class='apptNameRes' title='Reserve this slot'";
+								xInner += (" onclick='Change_Appointment(-1, " + xSlot + ", 0, 0);'");
+								xInner += ">R</div>";
+							xInner += "</div>";
+						}
+						xNameElement.innerHTML = xInner;
+						xClass = "apptOpen";
+				//	}
+				}
+				break;
+			case RESERVED:
+				if (xNameIdLocal == RESERVEDChars) continue; // No change
+				if (xNameIdLocal == RESERVED) continue; // No change
+				if (xNameIdLocal == "") { // Change to reserved
+				//	if (xClickIdElement) {
+						xInner = "<div class='apptNameDiv'>";
+						xInner += "<div class='apptReserved'>";
+							xInner += ("<span id='apptNameId" + xApptIndex + "'>" + RESERVED + "</span>");
+							xInner += "</div>";
+						if (xResAllowed) {
+							xInner += "<div class='apptNameUnres'>R</div>";
+							xInner += "<div id='apptClickId" + xApptIndex + "'";
+					        		xInner += " class='apptNameUnresNot' title='Unreserve this slot'";
+								xInner += (" onclick='Change_Appointment(-1, " + xSlot + ", 0, 0);'");
+								xInner += "'><b>/</b></div>";
+							xInner += "</div>";
+						}
+						xNameElement.innerHTML = xInner;
+				//	}
+				}
+				break;
+			default: // Must be a newly assigned name
+				xInner = "<div class=\"apptNameDiv\">";
+					xInner += ("<div><span id=\"$apptNameId\">" + xName + "</span>");
+				       	if (xTags) xInner += (" <b>[" + xTags + "]</b></div></div>");
+				xNameElement.innerHTML = _Show_Chars(xInner, "html");
+			}
+
+			// display only the most recent status note
+			xa = xStatus.search("<br");
+			xFirstStatus = (xa != -1) ? xStatus.substr(0, xa) : xStatus;
+			inetclass = (xFirstStatus.search("(USER)") == -1) ? "" : "user_class" ;
+			if (inetclass == "") inetclass = (xStatus.search("(USER.)") == -1) ? "" : "userOK_class" ;
+			xStatusElement.innerHTML = xFirstStatus;
+			xStatusElement.className = "apptStatus " + inetclass + " " + xClass;
+			if (xFirstStatus.search("Deleted") > 0) {
+				xNameElement.innerHTML = "DATA CHANGED, REFRESH THIS PAGE";
+				xNameElement.style.backgroundColor = "hotpink";
+				xNameElement.parentNode.onclick = "";
+			}
+			else {
+				xNameElement.className = "apptName " + xClass;
+				xPhoneElement.innerHTML = xPhone;
+				xPhoneElement.className = "apptPhone " + xClass;
+				Warning_icon = "&#x26a0;";
+				xInfoElement.innerHTML = (xInfo) ? Warning_icon : "" ;
+				xInfoElement.className = "apptInfo " + xClass;
+				CheckedBox_icon = "&#x2611;";
+				xNeedElement.innerHTML = (xNeed) ? CheckedBox_icon : "" ;
+				xNeedElement.className = "apptNeed " + xClass;
+			}
+
+		}
+	IDApptTimeStamp.value = Date("Y-m-d H:i:s");
+	ProcessingXML = false;
+	}
+
+
 	</script>
 </head>
 
@@ -3966,6 +4172,10 @@ function Print_Sites() { // for DEBUGGING
 						value="<?php global $FormApptCustSite; echo $FormApptCustSite; ?>" />
 				</td></tr>
 		</table>
+		</form>
+
+		<form id="EmptyQForm" action="<?php echo htmlspecialchars($_SERVER['PHP_SELF']); ?>" method="post">
+			<input class='hidden' id="IDEmptyQ" name="IDApptCustSite" type="text" />
 		</form>
 	</div> <!-- apptFormBox -->
 
@@ -4398,3 +4608,7 @@ function Print_Sites() { // for DEBUGGING
 
 </body>
 </html>
+
+
+
+
