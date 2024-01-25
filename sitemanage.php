@@ -2,6 +2,10 @@
 //ini_set('display_errors', '1');
 
 // ---------------------------- VERSION HISTORY -------------------------------
+// File Version 9.08
+// 	Fixed changing scheduler data sets password to all asterisks
+// File Version 9.07
+// 	Modification of attachments for individual shortcodes
 // File Version 9.02
 // 	Added administration for heartbeat interval
 // File Version 9.0
@@ -70,6 +74,7 @@ $SiteView = "Site";
 $Administrators = "";
 $AppointmentManagers = 0;
 $Alert = "";
+$Dagger = chr(134);
 $AFlag = "&#x26EF;";
 $MFlag = "&#x2605;";
 $SFlag = "&#x2606;";
@@ -156,7 +161,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 		$UserAppt =     htmlspecialchars(stripslashes(trim($_POST["UserAppt"])));
 		$UserEmail =    htmlspecialchars(stripslashes(trim($_POST["UserEmail"])));
 		$UserPhone =    htmlspecialchars(stripslashes(trim($_POST["UserPhone"])));
-		$UserPass =     htmlspecialchars(stripslashes(trim($_POST["UserPass"])));
+		$UserPass =     			     (trim($_POST["UserPass"]));
 		$UserOptions =  htmlspecialchars(stripslashes(trim($_POST["UserOptions"])));
 		$UserSort =     htmlspecialchars(stripslashes(trim($_POST["UserSort"])));
 		$SystemGreeting =                             trim($_POST["SystemGreeting"]);
@@ -642,7 +647,7 @@ while ($row = mysqli_fetch_array($usrs)) {
 	$NewApptSite = htmlspecialchars_decode($row["user_appt_site"] ?? '');
 	$NewEmail = htmlspecialchars_decode($row["user_email"] ?? '');
 	$NewPhone = htmlspecialchars_decode($row["user_phone"] ?? '');
-	$NewPass = htmlspecialchars_decode($row["user_pass"] ?? '');
+	$NewPass = $row["user_pass"] ?? '';
 	$NewOptions = htmlspecialchars_decode($row["user_options"] ?? '');
 	$AccOwner = $row["acc_owner"];
 	$AccUser = $row["acc_user"];
@@ -1238,7 +1243,7 @@ function Show_Search() {
 		while($row = mysqli_fetch_array($SearchList)) {
 			if ($noMatchFound) {
 				echo "<table id='user_search_table'>\n";
-				echo "<tr class='sticky'><th></th><th>First</th><th>Last</th><th>User&nbsp;Name</th><th>$colhead</th><th>User&nbsp;Role</th><th>Assigned Site</th></tr>\n";
+				echo "<tr class='sticky' style='background-color:#AAFFAA;'><th></th><th>First</th><th>Last</th><th>User&nbsp;Name</th><th>$colhead</th><th>User&nbsp;Role</th><th>Assigned Site</th></tr>\n";
 				$noMatchFound = false;
 			}
 			$Name = _Show_Chars(htmlspecialchars_decode($row['user_name'] ?? ''), "text");
@@ -1366,6 +1371,8 @@ function Show_Search() {
 	echo "	var VFlag = '$VFlag';\n";
 	global $SFlag;
 	echo "	var SFlag = '$SFlag';\n";
+	global $Dagger;
+	echo "	var Dagger = '$Dagger';\n";
 ?>
 	var ALL_OPTIONS = VIEW_CB | ADD_CB | VIEW_APP | ADD_APP | USE_RES;
 	var initialization_flag = true;
@@ -1842,7 +1849,6 @@ function Show_Search() {
 		new_userdata["email"] = acc_email.value;
 
 		// Password ----------------------
-		// No checking necessary - use whatever is entered
 		new_userdata["pass"] = acc_pass.value;
 	}
 
@@ -2236,6 +2242,14 @@ function Show_Search() {
 		vm = vm.replace(/\[EMAIL\]/g,       site_email.value);
 		vm = vm.replace(/\[WEBSITE\]/g,     site_website.value);
 		vm = vm.replace(/\[ATTACHMENTS\]/g, attachContent);
+		var system_list = system_attach.value.split("|");
+		for (lax = 0; lax < system_list.length-1; lax++) {
+			sap = system_list[lax].split("=");
+			testShortcode = "[" + sap[0] + "]";
+			replacement = sap[0] + " (" + sap[1] + ")";
+			vm = vm.replace(testShortcode, replacement);
+		}
+
 		Show_It(vm);
 	}
 
@@ -2263,13 +2277,20 @@ function Show_Search() {
 		vm = vm.replace(/\[EMAIL\]/g,       site_email.value);
 		vm = vm.replace(/\[WEBSITE\]/g,     site_website.value);
 		vm = vm.replace(/\[ATTACHMENTS\]/g, attachContent);
+		var system_list = system_attach.value.split("|");
+		for (lax = 0; lax < system_list.length-1; lax++) {
+			sap = system_list[lax].split("=");
+			testShortcode = "[" + sap[0] + "]";
+			replacement = sap[0] + " (" + sap[1] + ")";
+			vm = vm.replace(testShortcode, replacement);
+		}
 		Show_It(vm);
 	}
 	//===========================================================================================
 	function Show_It(content) {
 	//	Show the content in a new window
 	//===========================================================================================
-		Roster = window.open("","","menubar=1, scrollbars=1, resizeable=1, height=200, width=" + screen.width/3);
+		Roster = window.open("","","menubar=1, scrollbars=1, resizeable=1, height=200, width=" + screen.width/2);
 		Roster.document.writeln("<!DOCTYPE html>");
 		Roster.document.writeln("<head>");
 		Roster.document.writeln("<style>");
@@ -2878,6 +2899,10 @@ function Show_Search() {
 				}
 				SiteForm.UserEmail.value = acc_email.value;
 				SiteForm.UserPhone.value = acc_phone.value;
+
+				// Change password to just the first part
+				passPart = acc_pass.value.split(Dagger);
+				acc_pass.value = (passPart[0] != "") ? passPart[0] : (passPart[1] ?? "") ;
 				SiteForm.UserPass.value = acc_pass.value;
 				break;
 
@@ -3662,12 +3687,12 @@ function Test_For_Enter(id, e) {
 				//if (($ThisHome != $SiteUserHome) and ($ThisHome != 1) and (! $isAdministrator)) echo " disabled"; ?>
 				onkeyup="Change_User_Name();" />
 				</td></tr>
-			<tr><td>Password:</td><td><input id="acc_pass" type="text"
+			<tr><td>Password:</td><td><input id="acc_pass"
 				<?php global $ThisPass, $ThisHome, $SiteUserHome, $ThisUserOptions, $isAdministrator;
 				//if ((($ThisHome != $SiteUserHome) and ($ThisHome != 1) and (! $isAdministrator))
 				//	OR (($ThisUserOptions == "A") and (! $isAdministrator))) echo "style=' display:none;'";
-				$ShowPass = ($isAdministrator) ? $ThisPass : "********" ;
-				echo " value='" . $ShowPass . "'";
+				echo " type='" . (($isAdministrator) ? "text" : "password") . "'";
+				echo " value='" . $ThisPass . "'";
 				?>
 				onkeyup="Change_User_Name();" />
 			<tr><td>Email:</td><td><input id="acc_email" type="text"

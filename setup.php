@@ -4,7 +4,17 @@
 // - creates the opendb.php file so that all php routines have access to the database
 
 //--------------------------------- VERSION HISTORY -----------------------------------
-$VERSION = "9.03";
+$VERSION = "9.08";
+//	Corrections to appointment.php, showslots.php, sitemanage.php, appt.css
+//$VERSION = "9.07";
+//	Corrections to appointment.php
+//$VERSION = "9.06";
+//	Corrections to appointment.php
+//$VERSION = "9.05";
+//	Correction in appointment.php
+//$VERSION = "9.04";
+//	Corrections to index.php and appointment.php
+//$VERSION = "9.03";
 //	Configure_Table for ACCESS_TABLE moved before Configure_Columns
 //$VERSION = "9.02";
 //	Added heartbeat to system table for updating Daily View

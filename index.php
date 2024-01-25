@@ -1,4 +1,9 @@
 <?php
+// Version 9.07
+// 	Added to check junk email if requesting a temporary password
+// Version 9.04
+// 	Corrected error message when logging in
+// 	Added a failed login message
 // Version 9.02
 // 	Changes to support Daily View heartbeat AJAX updating
 // Version 9.00
@@ -64,6 +69,7 @@ while ($row = mysqli_fetch_array($sys)) {
 	$_SESSION["SystemURL"] = $sysURL = htmlspecialchars_decode($row['system_url'] ?? '');
 	$_SESSION["SystemVersion"] = $row['system_version'];
 	$_SESSION["SystemHeartbeat"] = $row['system_heartbeat'];
+	$_SESSION["SystemAttach"] = $row['system_attach'];
 	$_SESSION["TRACE"] = $row['system_trace'];
 
 	// replace shortcode in greeting and notice
@@ -227,6 +233,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 			}
 			if ($_SESSION["TRACE"]) error_log("INDEX: " . $UserName . ", using email " . $UserEmail); 
 		}
+		else {
+			if ($_SESSION["TRACE"]) error_log("INDEX: Unknown, attempted login using unknown email $FormLoginEmail."); 
+		}
 
 		if (strtolower($FormLoginEmail) == strtolower($UserEmail)) {
 
@@ -240,6 +249,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 				case "Login":
 					// check password for dagger separators
 					$UserPassPart = explode($Dagger, $UserPass);
+					$UserPassPart[1] = $UserPassPart[1] ?? "";
 
 					// If using the original correct password, remove the verification code.
 					if ($FormLoginPass == $UserPassPart[0]) {
@@ -285,6 +295,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 					else { // No password match
 						$_SESSION["User"]["user_index"] = $UserIndex = 0;
 						$Errormessage .= "Your email or password is not correct.";
+						if ($_SESSION["TRACE"]) error_log("INDEX: $UserName ($UserEmail) failed attempted login.");
 					}
 					break;
 
@@ -317,6 +328,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 						}
 					}
 					$Usermessage .= "You should receive an email message in the next few minutes. Use that for a new temporary password.";
+					$Usermessage .= " It may go to your junk email folder, so check there too.";
 					$UserIndex = $_SESSION["User"]["user_index"] = 0;
 					$FormLoginAction = "LogOut";
 
@@ -717,12 +729,14 @@ function Unique_Email($testId, $testEmail) {
 
 	<div id="init_sitelist">
 		<?php
-		global $LocationList;
+		global $LocationList, $isAdministrator;
 		if ($LocationList[0] != 0) {
 			echo "<br />The following sites are accepting reservations on-line:<br />";
 			echo "<ul>";
 			for ($j = 1; $j <= $LocationList[0]; $j++) {
-				echo "<li>" . $LocationList[$j] . "</li>";
+				// Hide site names beginning with "^"
+				$hide = (substr($LocationList[$j],0,1) == "^");
+				if (! $hide) echo "<li>" . $LocationList[$j] . "</li>";
 			}
 			echo "</ul>";
 		}

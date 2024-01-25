@@ -1,4 +1,8 @@
 <?php
+// Version 9.08
+// 	Scheduler without permission to use reserved slots can in Summary view
+// 	Allow scheduler with permission to select reserved slots in Summary view
+// 	Selection of a person after a search doesn't highlight & focus on their line
 // Version 9.02
 // 	Added elements and classes to some elements for the new heartbeat function
 // 	Also classes to make reports sort properly
@@ -39,7 +43,7 @@ function Show_Slots() {
 	global $ApptStatus;
 	global $ApptMatch;
 	global $DeleteCode;
-	global $FormApptOldNo;
+	global $FormApptOldSlot;
 	global $CustEList;
 	global $CustPList;
 	global $Site;
@@ -744,8 +748,10 @@ function Show_Slots() {
 						$DTBCount = $DateList[$DateTimeLoc . "Busy"] ?? 0;
 						$DTRCount = $DateList[$DateTimeLoc . "ResCount"] ?? 0;
 						$DTACount = $DTOCount - $DTRCount; // Available slots to all
+
+						//Until determined otherwise...
+						$DClass = "apptOpen";
 						$ClickToAdd = "onclick=\"Add_Appointment('" . $DateList[$DateTimeLoc] . "', '$Date', '$Time', '$ShowDate', '$ShowTime')\"";
-						$DClass = "apptOpen"; // ...until determined otherwise
 
 						if ($ApptView == "ViewUser") {
 							if ($DTACount) {
@@ -767,7 +773,7 @@ function Show_Slots() {
 							}
 
 							// Does site allow use of reserved slots from Summary view
-							$SiteReservedAllowed = ($ThisSite["SumRes"] != "");
+							$SiteReservedAllowed = ($ThisSite["SumRes"] != ""); // vs "checked"
 							// Does user have permission to use reserved slots
 							$CanUseReserved = ($ThisSite["Permissions"] & $USE_RES);
 							$OKtoUseReserved = $SiteReservedAllowed AND $CanUseReserved;
@@ -786,18 +792,19 @@ function Show_Slots() {
 									$ClickToAdd = "";
 									break;
 								case ($ThisSite["Permissions"] & $ADD_APP): // permission to add appt?
-									if ((! $DTACount) AND (! $OKtoUseReserved)) {
-										$DClass .= " noSelect";
-										if ($DTRCount) {
-											if ($CanUseReserved) {
-												$DTHeader .= "\nYou must go to the Daily View to use reserved appointment times.\"";
-											}
-											else {
+									if (($DTACount == 0) AND (! $OKtoUseReserved)) {
+										if ($DTRCount > 0) {
+											if (! $CanUseReserved) {
 												$DTHeader .= "\nYou do not have permission to use reserved slots.\"";
+												$ClickToAdd = "";
+												$DClass .= " noSelect";
 											}
 											$DTOText = $DTRText = $DTBText = "";
 										}
-										$ClickToAdd = "";
+										else {
+											$ClickToAdd = "";
+											$DClass .= " noSelect";
+										}
 									}
 									$OpenSlots += $DTACount;
 									break;
@@ -927,19 +934,19 @@ function List_Group($Location) {
 }
 
 //===========================================================================================
-function List_Slot($SaveAppt, $SlotNumber, $SlotIndex, $myclass, $Name="", $Phone="", $Tags="", $Need="", $Info="", $Status="", $Location="") {
+function List_Slot($ListAppt, $SlotNumber, $SlotIndex, $myclass, $Name="", $Phone="", $Tags="", $Need="", $Info="", $Status="", $Location="") {
 //===========================================================================================
 	global $Debug, $Errormessage;
 	global $Warning_icon, $CheckedBox_icon, $Appt_icon;
 	global $VIEW_APP, $VIEW_CB;
 	global $ApptView, $ADD_CB, $ADD_APP, $USE_RES;
-	global $FormApptNo, $FormApptOldNo;
+	global $FormApptNo, $FormApptOldSlot;
 	global $RESERVED;
 	global $Site;
 	global $InfoMatch;
 
 	$ThisSite = $Site["S" . $Location];
-	//error_log("LSLOT: List_Slot $SaveAppt, Location=$Location, Slot=$SlotNumber:$SlotIndex, $Name"); /* DEBUG */
+	//error_log("LSLOT: List_Slot $ListAppt, Location=$Location, Slot=$SlotNumber:$SlotIndex, $Name"); /* DEBUG */
 
 	// display only the most recent status note
 	$Status = _Show_Chars($Status, "text");
@@ -974,7 +981,7 @@ function List_Slot($SaveAppt, $SlotNumber, $SlotIndex, $myclass, $Name="", $Phon
 
 	// determine classes for display
 	$slotclass = "";
-	if (($FormApptNo == $SaveAppt) or ($FormApptOldNo == $SaveAppt)) { // v 8.03
+	if (($FormApptNo == $ListAppt) or ($FormApptOldSlot == $ListAppt)) { // v 8.03
 		$slotclass = "apptSlotMoved";
 	}
 	$inetclass = strpos($FirstStatus, '(USER)') ? "user_class" : "";
@@ -1010,7 +1017,7 @@ function List_Slot($SaveAppt, $SlotNumber, $SlotIndex, $myclass, $Name="", $Phon
 			echo "<tr class='noSelect' title='$titleNot'>\n";
 		}
 		else { // all good
-			echo "<tr onclick='Change_Appointment(1, $SaveAppt, $SlotNumber, $SlotIndex);'>\n";
+			echo "<tr onclick='Change_Appointment(1, $ListAppt, $SlotNumber, $SlotIndex);'>\n";
 		}
 
 		echo "\t<td class='apptSlot $slotclass'>&nbsp;$SlotIndex&nbsp;&nbsp;</td>\n";
@@ -1018,7 +1025,7 @@ function List_Slot($SaveAppt, $SlotNumber, $SlotIndex, $myclass, $Name="", $Phon
 		$apptNameId = "apptNameId" . $SlotNumber;
 		$apptClickId = "apptClickId" . $SlotNumber;
 		$apptSlotEmpty = "";
-		$saveApptDB = $SaveAppt;
+		$saveApptDB = $ListAppt;
 		if ($ApptView == "ViewDaily") { // add the reserved icon in the name column
 			$nameBlank = ($Name == "");
 			$nameReserved = ($Name == $RESERVED);
@@ -1029,9 +1036,9 @@ function List_Slot($SaveAppt, $SlotNumber, $SlotIndex, $myclass, $Name="", $Phon
 						<div><span id=\"$apptNameId\"></span></div>
 						<div id=\"$apptClickId\" class='apptNameRes' 
 							title='Reserve this slot' 
-							onclick='Change_Appointment(-1, $SaveAppt, $SlotNumber, $SlotIndex);'>R</div></div>";
+							onclick='Change_Appointment(-1, $ListAppt, $SlotNumber, $SlotIndex);'>R</div></div>";
 					$apptSlotEmpty = "apptSlotEmpty";
-					$saveApptDB = $SaveAppt; // redundant but here for clarity	
+					$saveApptDB = $ListAppt; // redundant but here for clarity	
 					break;
 				case ($nameReserved AND $CanUseReserved): // add RESERVED and the icon
 					echo "<div class='apptNameDiv'>
@@ -1039,25 +1046,25 @@ function List_Slot($SaveAppt, $SlotNumber, $SlotIndex, $myclass, $Name="", $Phon
 						<div class='apptNameUnres'>R</div>
 						<div id=\"$apptClickId\" class='apptNameUnresNot'
 							title='Unreserve this slot'
-							onclick='Change_Appointment(-1, $SaveAppt, $SlotNumber, $SlotIndex);'>
+							onclick='Change_Appointment(-1, $ListAppt, $SlotNumber, $SlotIndex);'>
 							<b>/</b></div>
 						</div>";
 					$apptSlotEmpty = "apptSlotEmpty";
-					$saveApptDB = -$SaveAppt;
+					$saveApptDB = -$ListAppt;
 					break;
 				case ($nameReserved): // add RESERVED but no icon
 					echo "<div class='apptNameDiv noSelect'>
 						<div class='apptReserved'><span id=\"$apptNameId\">$Name</span></div>
 						</div>";
 					$apptSlotEmpty = "apptSlotEmpty";
-					$saveApptDB = -$SaveAppt;
+					$saveApptDB = -$ListAppt;
 					break;
 				default: // add the name and no icon
 					echo "<div class='apptNameDiv'>
 						<div'><span id=\"$apptNameId\">$Name</span> $addTags</div>
 						</div>";
 					$apptSlotEmpty = "apptSlotInUse";
-					$saveApptDB = $SaveAppt; // redundant but here for clarity
+					$saveApptDB = $ListAppt; // redundant but here for clarity
 			}
 			echo "</td>\n";
 		}
